@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 
 from .models import Photo
+from .tasks import detect_photo_subject
 
 
 def get_sha1(content):
@@ -47,3 +48,4 @@ def add_flickr_photo(url, vehicle, request):
     photo.user = request.user
     photo.save()
     photo.vehicles.add(vehicle)
+    detect_photo_subject(photo.id)
