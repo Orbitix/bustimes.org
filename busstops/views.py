@@ -878,7 +878,6 @@ class StopPointDetailView(DetailView):
         if nearby is not None:
             context["nearby"] = (
                 nearby.exclude(pk=self.object.pk)
-                .filter(service__current=True)
                 .annotate(line_names=stop_line_names)
                 .defer("latlong")
             )
