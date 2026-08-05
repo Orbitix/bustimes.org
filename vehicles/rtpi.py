@@ -2,11 +2,11 @@
 
 import datetime
 import logging
+import math
 from itertools import pairwise
 
 import sentry_sdk
 from django.contrib.gis.db.models.functions import Distance, LineLocatePoint
-from django.contrib.gis.gdal import CoordTransform, SpatialReference
 from django.contrib.gis.geos import LineString, Point
 
 from bustimes.models import RouteLink, StopTime, Trip
@@ -15,7 +15,31 @@ from vehicles.utils import calculate_bearing
 
 logger = logging.getLogger(__name__)
 
-WGS84_TO_WEB_MERCATOR = CoordTransform(SpatialReference(4326), SpatialReference(3857))
+EARTH_RADIUS = 6378137.0  # the sphere EPSG:3857 uses
+
+
+def web_mercator(point: Point) -> tuple[float, float]:
+    """transform a WGS84 point to EPSG:3857.
+
+    the same as GDAL's CoordTransform, but without the overhead of
+    creating a geometry object for every stop
+    """
+    return (
+        math.radians(point.x) * EARTH_RADIUS,
+        math.log(math.tan(math.pi / 4 + math.radians(point.y) / 2)) * EARTH_RADIUS,
+    )
+
+
+def distance_to_segment(px, py, ax, ay, bx, by) -> float:
+    """distance from a point to a line segment (all in the same projection)"""
+    dx, dy = bx - ax, by - ay
+    length_squared = dx * dx + dy * dy
+    if length_squared:
+        # how far along the segment the closest point is, from 0 to 1
+        along = ((px - ax) * dx + (py - ay) * dy) / length_squared
+        along = min(1, max(0, along))
+        ax, ay = ax + along * dx, ay + along * dy
+    return math.hypot(px - ax, py - ay)
 
 
 def get_route_bearing(geometry: LineString, progress: float):
@@ -100,7 +124,7 @@ def get_progress(
     date = datetime.date.fromisoformat(item["date"])
 
     point = Point(*item["coordinates"], srid=4326)
-    point_3857 = point.transform(WGS84_TO_WEB_MERCATOR, clone=True)
+    point_x, point_y = web_mercator(point)
 
     if stop_times is not None:
         stop_times = [st for st in stop_times if st.stop_id and st.stop.latlong]
@@ -136,6 +160,9 @@ def get_progress(
             route_links[(rl.from_stop_id, rl.to_stop_id)] = rl
 
     with sentry_sdk.start_span(name="nearby pairs"):
+        # each stop is in two pairs, and the same stops recur between calls
+        coordinates = {}
+
         nearby_pairs = []
         for a, b in pairwise(stop_times):
             key = (a.stop_id, b.stop_id)
@@ -143,15 +170,22 @@ def get_progress(
                 rl = route_links[key]
                 if rl.distance < 1000:  # within ~1km
                     nearby_pairs.append((a, b, rl))
-            else:
+                continue
+
+            if (a_xy := coordinates.get(a.stop_id)) is None:
+                a_xy = coordinates[a.stop_id] = web_mercator(a.stop.latlong)
+            if (b_xy := coordinates.get(b.stop_id)) is None:
+                b_xy = coordinates[b.stop_id] = web_mercator(b.stop.latlong)
+
+            distance = distance_to_segment(point_x, point_y, *a_xy, *b_xy)  # in meters
+
+            if distance < 1000:  # within ~1km
+                # only now is it worth building an actual geometry
                 geometry = LineString([a.stop.latlong, b.stop.latlong], srid=4326)
-                geometry_3857 = geometry.transform(WGS84_TO_WEB_MERCATOR, clone=True)
-                distance = geometry_3857.distance(point_3857)  # in meters
-                if distance < 1000:  # within ~1km
-                    rl = RouteLink(from_stop=a.stop, to_stop=b.stop, geometry=geometry)
-                    rl.distance = distance
-                    rl.progress = geometry.project_normalized(point)
-                    nearby_pairs.append((a, b, rl))
+                rl = RouteLink(from_stop=a.stop, to_stop=b.stop, geometry=geometry)
+                rl.distance = distance
+                rl.progress = geometry.project_normalized(point)
+                nearby_pairs.append((a, b, rl))
 
         if not nearby_pairs:
             return

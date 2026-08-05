@@ -1,7 +1,6 @@
 import datetime
 import logging
 import subprocess
-from functools import partial
 from http import HTTPStatus
 from itertools import groupby, pairwise
 from urllib.parse import unquote
@@ -14,7 +13,14 @@ from django.contrib.gis.geos import GEOSException
 from django.core.cache import cache
 from django.core.exceptions import BadRequest, PermissionDenied
 from django.core.paginator import Paginator
-from django.db import IntegrityError, OperationalError, connection, transaction
+from django.db import (
+    IntegrityError,
+    OperationalError,
+    connection,
+    connections,
+    router,
+    transaction,
+)
 from django.db.models import Case, F, Max, OuterRef, Q, Value, When
 from django.db.models.aggregates import StringAgg
 from django.db.models.functions import Coalesce, Now
@@ -579,21 +585,57 @@ def vehicles_json(request) -> JsonResponse:
     return respond_conditionally(request, response)
 
 
-def get_dates(vehicle=None, service=None):
+def get_dates(vehicle=None, service=None, after=None):
     if not vehicle:
         # the database query for a service is too slow
         return
 
-    journeys = vehicle.vehiclejourney_set
+    # SELECT DISTINCT would have to scan every journey for the vehicle.
+    # this "skip scan" uses the vehiclejourney_vehicle_date index
+    # to jump from each distinct date to the next
+    if after:
+        after_condition = "AND date > %(after)s"
+    else:
+        after_condition = ""
 
-    dates = (
-        journeys.filter(date__isnull=False)
-        .values_list("date", flat=True)
-        .order_by("date")
-        .distinct()
-    )
+    # raw SQL, but still read from a replica like the ORM would
+    with connections[router.db_for_read(VehicleJourney)].cursor() as cursor:
+        cursor.execute(
+            f"""WITH RECURSIVE dates AS (
+                (SELECT date FROM vehicles_vehiclejourney
+                 WHERE vehicle_id = %(vehicle)s AND date IS NOT NULL {after_condition}
+                 ORDER BY date LIMIT 1)
+                UNION ALL
+                SELECT (SELECT date FROM vehicles_vehiclejourney
+                        WHERE vehicle_id = %(vehicle)s AND date > dates.date
+                        ORDER BY date LIMIT 1)
+                FROM dates WHERE dates.date IS NOT NULL
+            )
+            SELECT date FROM dates WHERE date IS NOT NULL""",
+            {"vehicle": vehicle.id, "after": after},
+        )
+        return [date for (date,) in cursor.fetchall()]
 
-    return list(dates)
+
+def get_cached_dates(vehicle, last_date):
+    """the list of dates a vehicle has journeys on, cached for a day.
+
+    keyed on the vehicle alone, so that a vehicle running again doesn't
+    invalidate the whole list - only the new dates need looking up
+    """
+    key = f"vehicle{vehicle.id}dates"
+    dates = cache.get(key)
+
+    if dates is None:
+        dates = get_dates(vehicle=vehicle)
+    elif dates and last_date and last_date > dates[-1]:
+        dates = dates + get_dates(vehicle=vehicle, after=dates[-1])
+    else:
+        return dates
+
+    cache.set(key, dates, 86400)
+
+    return dates
 
 
 def journeys_list(request, journeys, service=None, vehicle=None) -> dict:
@@ -601,11 +643,7 @@ def journeys_list(request, journeys, service=None, vehicle=None) -> dict:
 
     if vehicle and vehicle.latest_journey:
         last_date = vehicle.latest_journey.date
-        dates = cache.get_or_set(
-            f"vehicle{vehicle.id}dates{last_date}",
-            partial(get_dates, vehicle=vehicle),
-            timeout=86400,
-        )
+        dates = get_cached_dates(vehicle, last_date)
     else:
         dates = get_dates(vehicle=vehicle, service=service)
 
