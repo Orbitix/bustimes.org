@@ -711,7 +711,9 @@ def tfl_vehicle(request, reg: str):
 
     route_links = {
         (link.from_stop_id, link.to_stop_id): link
-        for link in (service.routelink_set.all() if service else ())
+        for link in (
+            service.routelink_set.filter(from_stop__in=atco_codes) if service else ()
+        )
     }
 
     times = []

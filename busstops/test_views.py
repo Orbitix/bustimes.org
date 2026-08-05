@@ -498,8 +498,8 @@ class ViewsTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_service_map_data(self):
-        # normal service
-        with self.assertNumQueries(4):
+        # normal service (no trips, so no route links are fetched)
+        with self.assertNumQueries(3):
             response = self.client.get(f"/services/{self.service.id}.json")
         self.assertEqual(response["Content-Type"], "application/json")
         self.assertEqual(response.status_code, 200)
