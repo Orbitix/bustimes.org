@@ -17,7 +17,12 @@ logger = logging.getLogger(__name__)
 
 EARTH_RADIUS = 6371008.8  # mean radius - the sphere ST_DistanceSphere uses
 
-NEARBY = 600  # metres - how close to a pair of stops a bus has to be
+# how close (in metres) a bus has to be to count as between a pair of stops.
+# a route link follows the road, so a bus on it is only as far away as its GPS
+# is wrong. a straight line between the stops can be much further from the road
+# the bus is actually on - 10% of real route links stray more than 190 metres
+NEARBY_ROUTE_LINK = 300
+NEARBY_STRAIGHT_LINE = 600
 
 
 def local_metres(point: Point, cos_latitude: float) -> tuple[float, float]:
@@ -172,7 +177,7 @@ def get_progress(
             key = (a.stop_id, b.stop_id)
             if key in route_links:
                 rl = route_links[key]
-                if rl.distance < NEARBY:
+                if rl.distance < NEARBY_ROUTE_LINK:
                     nearby_pairs.append((a, b, rl))
                 continue
 
@@ -187,7 +192,7 @@ def get_progress(
 
             distance = distance_to_segment(point_x, point_y, *a_xy, *b_xy)  # in metres
 
-            if distance < NEARBY:
+            if distance < NEARBY_STRAIGHT_LINE:
                 # only now is it worth building an actual geometry
                 geometry = LineString([a.stop.latlong, b.stop.latlong], srid=4326)
                 rl = RouteLink(from_stop=a.stop, to_stop=b.stop, geometry=geometry)
