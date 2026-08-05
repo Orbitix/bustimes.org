@@ -41,6 +41,7 @@ from api.serializers import TripSerializer
 from api.views import TripViewSet
 from busstops.models import (
     DataSource,
+    Locality,
     Operator,
     Service,
     StopArea,
@@ -94,7 +95,9 @@ class ServiceDebugView(DetailView):
         context["routes"] = routes
 
         context["stopusages"] = self.object.stopusage_set.select_related(
-            "stop__locality"
+            "stop"
+        ).prefetch_related(
+            Prefetch("stop__locality", queryset=Locality.objects.only("name"))
         )
 
         context["breadcrumb"] = [self.object]

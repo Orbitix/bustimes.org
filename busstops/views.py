@@ -1316,8 +1316,10 @@ class ServiceDetailView(DetailView):
 
         def get_stopusages():
             stopusages = list(
-                self.object.stopusage_set.select_related("stop__locality").defer(
-                    "stop__latlong", "stop__locality__latlong"
+                self.object.stopusage_set.select_related("stop")
+                .defer("stop__latlong")
+                .prefetch_related(
+                    Prefetch("stop__locality", queryset=Locality.objects.only("name"))
                 )
             )
             # don't bother marking individual stops if they're all disrupted
