@@ -15,18 +15,21 @@ from vehicles.utils import calculate_bearing
 
 logger = logging.getLogger(__name__)
 
-EARTH_RADIUS = 6378137.0  # the sphere EPSG:3857 uses
+EARTH_RADIUS = 6371008.8  # mean radius - the sphere ST_DistanceSphere uses
+
+NEARBY = 600  # metres - how close to a pair of stops a bus has to be
 
 
-def web_mercator(point: Point) -> tuple[float, float]:
-    """transform a WGS84 point to EPSG:3857.
+def local_metres(point: Point, cos_latitude: float) -> tuple[float, float]:
+    """project a WGS84 point to metres near a reference latitude.
 
-    the same as GDAL's CoordTransform, but without the overhead of
-    creating a geometry object for every stop
+    an equirectangular projection - only good over a few km, but that's all
+    we measure, and unlike EPSG:3857 the units are actual metres, comparable
+    with the ST_DistanceSphere distances that route links come back with
     """
     return (
-        math.radians(point.x) * EARTH_RADIUS,
-        math.log(math.tan(math.pi / 4 + math.radians(point.y) / 2)) * EARTH_RADIUS,
+        math.radians(point.x) * EARTH_RADIUS * cos_latitude,
+        math.radians(point.y) * EARTH_RADIUS,
     )
 
 
@@ -124,7 +127,8 @@ def get_progress(
     date = datetime.date.fromisoformat(item["date"])
 
     point = Point(*item["coordinates"], srid=4326)
-    point_x, point_y = web_mercator(point)
+    cos_latitude = math.cos(math.radians(point.y))
+    point_x, point_y = local_metres(point, cos_latitude)
 
     if stop_times is not None:
         stop_times = [st for st in stop_times if st.stop_id and st.stop.latlong]
@@ -168,18 +172,22 @@ def get_progress(
             key = (a.stop_id, b.stop_id)
             if key in route_links:
                 rl = route_links[key]
-                if rl.distance < 1000:  # within ~1km
+                if rl.distance < NEARBY:
                     nearby_pairs.append((a, b, rl))
                 continue
 
             if (a_xy := coordinates.get(a.stop_id)) is None:
-                a_xy = coordinates[a.stop_id] = web_mercator(a.stop.latlong)
+                a_xy = coordinates[a.stop_id] = local_metres(
+                    a.stop.latlong, cos_latitude
+                )
             if (b_xy := coordinates.get(b.stop_id)) is None:
-                b_xy = coordinates[b.stop_id] = web_mercator(b.stop.latlong)
+                b_xy = coordinates[b.stop_id] = local_metres(
+                    b.stop.latlong, cos_latitude
+                )
 
-            distance = distance_to_segment(point_x, point_y, *a_xy, *b_xy)  # in meters
+            distance = distance_to_segment(point_x, point_y, *a_xy, *b_xy)  # in metres
 
-            if distance < 1000:  # within ~1km
+            if distance < NEARBY:
                 # only now is it worth building an actual geometry
                 geometry = LineString([a.stop.latlong, b.stop.latlong], srid=4326)
                 rl = RouteLink(from_stop=a.stop, to_stop=b.stop, geometry=geometry)
@@ -213,7 +221,6 @@ def get_progress(
                 difference = (vehicle_heading - route_bearing + 180) % 360 - 180
                 if abs(difference) < 90:
                     closest = next_closest
-                    distance = next_closest[2].distance
 
     with sentry_sdk.start_span(name="delay"):
         progress = Progress(
