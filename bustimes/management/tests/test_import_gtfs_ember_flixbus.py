@@ -213,7 +213,7 @@ class FlixbusTest(TestCase):
             distribute(channel_layer, async_redis_client)
 
             item = json.loads(redis_client.get(f"vehicle{journeys[0].id}"))
-            self.assertEqual(round(item["heading"]), 33)
+            self.assertEqual(item["heading"], 33)
             self.assertEqual(
                 redis_client.get(journeys[0].get_redis_key()),
                 b"t|[abhyH_b~i`eBuq@}n@{O",
