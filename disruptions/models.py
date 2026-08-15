@@ -59,10 +59,10 @@ class Situation(models.Model):
         return reverse("situation", args=(self.id,))
 
     class Meta:
-        indexes = [
+        indexes = (
             models.Index(fields=["current", "publication_window"]),
             models.Index(fields=["source", "situation_number"]),
-        ]
+        )
 
     def applies_on(self, date) -> bool:
         """Whether this situation is in effect on the given (local) date.
@@ -185,8 +185,7 @@ class Consequence(models.Model):
         return self.text
 
     def get_absolute_url(self):
-        service = self.services.first()
-        if service:
+        if service := self.services.first():
             return service.get_absolute_url()
         return ""
 

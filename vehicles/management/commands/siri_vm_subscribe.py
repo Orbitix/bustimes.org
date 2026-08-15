@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
 from django.core.cache import cache
@@ -29,7 +29,7 @@ class Command(BaseCommand):
         subscription = SiriSubscription.objects.get(name=subscription_name)
         assert subscription.producer_url
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if not terminate:
             if stats := cache.get(subscription.get_status_key()):
                 if (now - stats[-1][0]) < timedelta(minutes=5):

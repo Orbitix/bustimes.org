@@ -1,8 +1,9 @@
-from django.db import connection
 import time
+
 import requests
-from django.core.management.base import BaseCommand
 from django.conf import settings
+from django.core.management.base import BaseCommand
+from django.db import connection
 
 
 def get_content(slug):
@@ -38,7 +39,7 @@ class Command(BaseCommand):
             for notify in gen:
                 print(notify)
 
-                if notify.payload.startswith("rtcsnv-"):
+                if notify.payload.startswith("rtcsnv-") or len(notify.payload) > 40:
                     continue
 
                 response = session.post(

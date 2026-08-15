@@ -109,9 +109,10 @@ class Command(BaseCommand):
                 prefix = versions[0][0].name.split("_")[0]
                 prefix = f"{prefix}_"  # eg 'transdevblazefield_'
                 for filename in os.listdir(settings.DATA_DIR):
-                    if filename.startswith(prefix):
-                        if not any(filename == version.name for version, _ in versions):
-                            os.remove(os.path.join(settings.DATA_DIR, filename))
+                    if filename.startswith(prefix) and not any(
+                        filename == version.name for version, _ in versions
+                    ):
+                        os.remove(os.path.join(settings.DATA_DIR, filename))
             else:
                 sleep(2)
                 continue

@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from unittest import mock
 
@@ -20,7 +21,7 @@ from busstops.models import (
 from bustimes.models import Calendar, Garage, Route, StopTime, Trip
 
 from ...models import Livery, Vehicle, VehicleJourney
-from ..commands import import_bod_avl
+from ..commands import distribute_vehicle_locations, import_bod_avl
 
 
 def patch_redis_client(redis_client=None):
@@ -29,6 +30,29 @@ def patch_redis_client(redis_client=None):
     return mock.patch(
         "vehicles.management.import_live_vehicles.redis_client", redis_client
     )
+
+
+class CapturingChannelLayer:
+    """Stands in for the real (Redis-backed) channel layer, so a test can
+    inspect what ImportLiveVehiclesCommand.save() sent it, without a real
+    distribute_vehicle_locations worker process around to consume it."""
+
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, channel, message):
+        self.sent.append(message)
+
+
+def distribute(channel_layer, async_redis_client):
+    command = distribute_vehicle_locations.Command()
+    with mock.patch(
+        "vehicles.management.commands.distribute_vehicle_locations.async_redis_client",
+        async_redis_client,
+    ):
+        for message in channel_layer.sent:
+            asyncio.run(command.handle_items(message["items"]))
+    channel_layer.sent = []
 
 
 class BusOpenDataVehicleLocationsTest(TestCase):
@@ -163,8 +187,8 @@ class BusOpenDataVehicleLocationsTest(TestCase):
             """
             <tr>
                 <td>00:00:00</td>
-                <td>15:14:46</td>
-                <td>-7312486.261274</td>
+                <td>11:50:58</td>
+                <td>-7300258.0</td>
                 <td>50</td>
                 <td>50</td>
                 <td>0.0</td>
@@ -174,8 +198,8 @@ class BusOpenDataVehicleLocationsTest(TestCase):
             + """
             <tr>
                 <td>00:00:00</td>
-                <td>15:14:46</td>
-                <td>-7312486.261274</td>
+                <td>11:50:58</td>
+                <td>-7300258.0</td>
                 <td>50</td>
                 <td>0</td>
                 <td>0.0</td>
@@ -274,11 +298,21 @@ class BusOpenDataVehicleLocationsTest(TestCase):
         command.get_operator.cache_clear()
         import_bod_avl.get_destination_name.cache_clear()
 
+        server = fakeredis.FakeServer()
+        async_redis_client = fakeredis.FakeAsyncRedis(server=server, version=7)
+        channel_layer = CapturingChannelLayer()
+
         with (
-            patch_redis_client() as redis_client,
+            patch_redis_client(
+                fakeredis.FakeStrictRedis(server=server, version=7)
+            ) as redis_client,
             mock.patch(
                 "vehicles.management.commands.import_bod_avl.Command.get_items",
                 return_value=items,
+            ),
+            mock.patch(
+                "vehicles.management.import_live_vehicles.get_channel_layer",
+                return_value=channel_layer,
             ),
         ):
             with self.assertNumQueries(42):
@@ -297,6 +331,8 @@ class BusOpenDataVehicleLocationsTest(TestCase):
             items[0]["OriginAimedDepartureTime"] = "2020-10-30T09:00:00+00:00"
             with self.assertNumQueries(1):
                 wait = command.update()
+
+        distribute(channel_layer, async_redis_client)
 
         journeys = VehicleJourney.objects.all()
 
@@ -416,7 +452,19 @@ class BusOpenDataVehicleLocationsTest(TestCase):
         command = import_bod_avl.Command()
         command.source = self.source
 
-        with patch_redis_client() as redis_client:
+        server = fakeredis.FakeServer()
+        async_redis_client = fakeredis.FakeAsyncRedis(server=server, version=7)
+        channel_layer = CapturingChannelLayer()
+
+        with (
+            patch_redis_client(
+                fakeredis.FakeStrictRedis(server=server, version=7)
+            ) as redis_client,
+            mock.patch(
+                "vehicles.management.import_live_vehicles.get_channel_layer",
+                return_value=channel_layer,
+            ),
+        ):
             command.handle_item(
                 {
                     "Extensions": {
@@ -464,6 +512,8 @@ class BusOpenDataVehicleLocationsTest(TestCase):
             )
             command.save()
 
+        distribute(channel_layer, async_redis_client)
+
         journey = VehicleJourney.objects.get()
         self.assertEqual(journey.direction, "inbound")
         self.assertEqual(journey.destination, "Southwold")
@@ -486,6 +536,22 @@ class BusOpenDataVehicleLocationsTest(TestCase):
                 "route_name": "146",
                 "destination": "Southwold",
                 "trip_id": None,
+                "live": [
+                    {
+                        "id": journey.vehicle_id,
+                        "journey_id": journey.id,
+                        "coordinates": [1.675893, 52.328398],
+                        "datetime": "2020-11-28T15:07:06+00:00",
+                        "destination": "Southwold",
+                        "heading": 142,
+                        "block": "2",
+                        "service": {"line_name": "146"},
+                        "vehicle": {
+                            "name": "104 - BB62 BUS",
+                            "url": "/vehicles/none-bb62-bus",
+                        },
+                    }
+                ],
             },
         )
 
@@ -1085,8 +1151,7 @@ class BusOpenDataVehicleLocationsTest(TestCase):
     def test_debugger_error(self):
         response = self.client.post("/vehicles/debug", {"data": "trdgserawse/"})
         self.assertIn(
-            "Expecting value: line 1 column 1 (char 0)",
-            str(response.context["form"].errors),
+            "that isn&#x27;t valid JSON", str(response.context["form"].errors)
         )
 
     def test_zipfile(self):

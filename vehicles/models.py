@@ -1,7 +1,7 @@
 import datetime
-import subprocess
 import re
 import struct
+import subprocess
 import uuid
 from collections import Counter
 from math import ceil
@@ -20,6 +20,7 @@ from webcolors import HTML5SimpleColor, html5_parse_legacy_color
 from busstops.fields import AutoSlugField
 from busstops.models import DataSource, Operator, Service
 from bustimes.utils import get_trip
+
 from .fields import ColourField, ColoursField, CSSField
 
 
@@ -60,9 +61,9 @@ def get_css(colours, direction=None, horizontal=False, angle=None):
     percentage = 100 / len(colours)
     for i, colour in enumerate(colours):
         if i != 0 and colour != colours[i - 1]:
-            background += ",{} {}%".format(colour, ceil(percentage * i))
+            background += f",{colour} {ceil(percentage * i)}%"
         if i != len(colours) - 1 and colour != colours[i + 1]:
-            background += ",{} {}%".format(colour, ceil(percentage * (i + 1)))
+            background += f",{colour} {ceil(percentage * (i + 1))}%"
     background += ")"
 
     return background
@@ -174,7 +175,10 @@ class Livery(models.Model):
         suffix = "}"
         css = prefix + css + suffix
         completed_process = subprocess.run(
-            ["lightningcss", "--minify"], input=css.encode(), capture_output=True
+            ["lightningcss", "--minify"],
+            input=css.encode(),
+            capture_output=True,
+            check=False,
         )
         css = completed_process.stdout.decode().strip()
         assert css.startswith(prefix)
@@ -288,30 +292,40 @@ class Vehicle(models.Model):
         if self.locked:
             return False
         # withrawn and hasn't tracked recently - "let sleeping dogs lie"
-        if self.withdrawn and (
-            not self.latest_journey
-            or timezone.now() - self.latest_journey.datetime
-            > datetime.timedelta(days=30)
-        ):
-            return False
-        return True
+        return not (
+            self.withdrawn
+            and (
+                not self.latest_journey
+                or timezone.now() - self.latest_journey.datetime
+                > datetime.timedelta(days=30)
+            )
+        )
 
     def save(self, *args, update_fields=None, **kwargs):
         if (
-            update_fields is None or "fleet_number" in update_fields
-        ) and self.fleet_number:
-            if not self.fleet_code or (
-                self.fleet_code.isdigit() and self.fleet_number != int(self.fleet_code)
-            ):
-                self.fleet_code = str(self.fleet_number)
-                if update_fields is not None and "fleet_code" not in update_fields:
-                    update_fields.append("fleet_code")
+            (update_fields is None or "fleet_number" in update_fields)
+            and self.fleet_number
+            and (
+                not self.fleet_code
+                or (
+                    self.fleet_code.isdigit()
+                    and self.fleet_number != int(self.fleet_code)
+                )
+            )
+        ):
+            self.fleet_code = str(self.fleet_number)
+            if update_fields is not None and "fleet_code" not in update_fields:
+                update_fields.append("fleet_code")
 
-        if (update_fields is None or "fleet_code" in update_fields) and self.fleet_code:
-            if not self.fleet_number and self.fleet_code.isdigit():
-                self.fleet_number = int(self.fleet_code)
-                if update_fields is not None and "fleet_number" not in update_fields:
-                    update_fields.append("fleet_number")
+        if (
+            (update_fields is None or "fleet_code" in update_fields)
+            and self.fleet_code
+            and not self.fleet_number
+            and self.fleet_code.isdigit()
+        ):
+            self.fleet_number = int(self.fleet_code)
+            if update_fields is not None and "fleet_number" not in update_fields:
+                update_fields.append("fleet_number")
 
         if update_fields is None and not self.reg:
             reg = re.match(r"^[A-Z]\w_?\d\d?[ _-]?[A-Z]{3}$", self.code)
@@ -323,16 +337,16 @@ class Vehicle(models.Model):
         super().save(*args, update_fields=update_fields, **kwargs)
 
     class Meta:
-        indexes = [
+        indexes = (
             models.Index(Upper("fleet_code"), name="fleet_code"),
             models.Index(Upper("reg"), name="reg"),
             models.Index(fields=["operator", "withdrawn"], name="operator_withdrawn"),
-        ]
-        constraints = [
+        )
+        constraints = (
             models.UniqueConstraint(
                 Upper("code"), "operator", name="vehicle_operator_and_code"
             ),
-        ]
+        )
 
     def __str__(self):
         fleet_code = self.fleet_code or self.fleet_number
@@ -464,13 +478,13 @@ class VehicleCode(models.Model):
         return f"{self.scheme} {self.code}"
 
     class Meta:
-        constraints = [
+        constraints = (
             UniqueConstraint(
                 fields=["code", "scheme"],
                 name="unique_vehicle_code",
             ),
-        ]
-        indexes = [models.Index(fields=("code", "scheme"))]
+        )
+        indexes = (models.Index(fields=("code", "scheme")),)
 
 
 class VehicleRevisionFeature(models.Model):
@@ -537,7 +551,7 @@ class VehicleRevision(models.Model):
     disapproved_reason = models.TextField(null=True, blank=True)
 
     class Meta:
-        constraints = [
+        constraints = (
             UniqueConstraint(
                 fields=["vehicle", "to_operator"],
                 condition=Q(pending=True),
@@ -553,7 +567,7 @@ class VehicleRevision(models.Model):
                 condition=Q(pending=True),
                 name="unique_pending_livery",
             ),
-        ]
+        )
 
     def __str__(self):
         return ", ".join(
@@ -620,10 +634,9 @@ class VehicleRevision(models.Model):
         ):
             before = getattr(self, f"from_{key}_id")
             after = getattr(self, f"to_{key}_id")
-            if before or after:
-                if getattr(vehicle, f"{vehicle_key}_id") == after:
-                    setattr(vehicle, f"{vehicle_key}_id", before)
-                    fields.append(vehicle_key)
+            if (before or after) and getattr(vehicle, f"{vehicle_key}_id") == after:
+                setattr(vehicle, f"{vehicle_key}_id", before)
+                fields.append(vehicle_key)
 
         if self.changes:
             for key in self.changes:
@@ -685,7 +698,7 @@ class VehicleJourney(models.Model):
 
     class Meta:
         ordering = ("id",)
-        indexes = [
+        indexes = (
             models.Index("service", "date", name="vehiclejourney_service_date"),
             models.Index(
                 "vehicle",
@@ -709,7 +722,7 @@ class VehicleJourney(models.Model):
             models.Index(
                 fields=["vehicle", "-id"], name="vehiclejourney_vehicle_id_desc"
             ),
-        ]
+        )
 
     def get_redis_key(self):
         return self.uuid.bytes
@@ -791,9 +804,8 @@ class VehicleLocation:
             "coordinates": location[1:3],
             "delta": (location[5] or None) and location[6],
             "direction": (location[3] or None) and location[4],
-            "datetime": timezone.localtime(
-                datetime.datetime.fromtimestamp(location[0], datetime.timezone.utc),
-                timezone=tz,
+            "datetime": datetime.datetime.fromtimestamp(
+                location[0], tz or timezone.get_current_timezone()
             ),
         }
 

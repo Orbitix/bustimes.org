@@ -16,7 +16,6 @@ import MapGL, {
 } from "react-map-gl/maplibre";
 
 import arrow from "data-url:../history-arrow.png";
-import linePattern from "data-url:../line-pattern.png";
 import routeStopMarkerCircle from "data-url:../route-stop-marker-circle.png";
 import routeStopMarkerDarkCircle from "data-url:../route-stop-marker-dark-circle.png";
 import routeStopMarkerDark from "data-url:../route-stop-marker-dark.png";
@@ -42,7 +41,6 @@ const imagesByName: { [imageName: string]: string } = {
   "route-stop-marker-dark": routeStopMarkerDark,
   "route-stop-marker-dark-circle": routeStopMarkerDarkCircle,
   "history-arrow": arrow,
-  "line-pattern": linePattern,
 };
 
 const mapStyles: { [key: string]: string } = {

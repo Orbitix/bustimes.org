@@ -5,7 +5,8 @@ from django.utils.html import format_html
 from sql_util.utils import SubqueryCount
 
 from bustimes.admin import log_change
-from .models import OperatorUser, User, Invitation
+
+from .models import Invitation, OperatorUser, User
 
 
 def get_count(obj, attribute, approved):
@@ -20,16 +21,16 @@ def get_count(obj, attribute, approved):
 
 class OperatorUserInline(admin.TabularInline):
     model = OperatorUser
-    raw_id_fields = ["operator"]
+    raw_id_fields = ("operator",)
 
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    raw_id_fields = ["user_permissions"]
-    actions = ["trust", "distrust"]
-    search_fields = ["username", "email"]
-    readonly_fields = ["revisions", "disapproved", "pending"]
-    list_display = [
+    raw_id_fields = ("user_permissions",)
+    actions = ("trust", "distrust")
+    search_fields = ("username", "email")
+    readonly_fields = ("revisions", "disapproved", "pending")
+    list_display = (
         "id",
         "username",
         "email",
@@ -37,15 +38,16 @@ class UserAdmin(admin.ModelAdmin):
         "is_active",
         "score",
         "trusted",
-    ] + readonly_fields
-    list_display_links = ["id", "username"]
-    inlines = [OperatorUserInline]
-    list_filter = [
+        *readonly_fields,
+    )
+    list_display_links = ("id", "username")
+    inlines = (OperatorUserInline,)
+    list_filter = (
         "trusted",
         "is_staff",
         "groups",
         ("user_permissions", admin.RelatedOnlyFieldListFilter),
-    ]
+    )
 
     @admin.display(ordering="revisions")
     def revisions(self, obj):
@@ -87,9 +89,9 @@ class UserAdmin(admin.ModelAdmin):
 
 @admin.register(OperatorUser)
 class OperatorUserAdmin(admin.ModelAdmin):
-    raw_id_fields = ["user", "operator"]
+    raw_id_fields = ("user", "operator")
 
 
 @admin.register(Invitation)
 class InvitationAdmin(admin.ModelAdmin):
-    raw_id_fields = ["operators"]
+    raw_id_fields = ("operators",)

@@ -1,23 +1,23 @@
 import logging
 from functools import cache
 from pathlib import Path
-import pandas as pd
 
 import gtfs_kit
+import pandas as pd
 import requests
-from google.transit import gtfs_realtime_pb2
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Min, Subquery, OuterRef
+from django.db.models import Min, OuterRef, Subquery
+from google.transit import gtfs_realtime_pb2
 
 from busstops.models import DataSource, Operator, Service, StopPoint
-from vosa.models import Registration
 from fares.models import Fare, FareRule
+from vosa.models import Registration
 
 from ...download_utils import download_if_modified
-from ...models import Route, StopTime, Trip, Note
-from ...gtfs_utils import get_calendars, MODES, do_route_links
+from ...gtfs_utils import MODES, do_route_links, get_calendars
+from ...models import Note, Route, StopTime, Trip
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ class Command(BaseCommand):
             service.description = route.description = row.route_long_name
             service.current = True
             service.colour_id = operator.colour_id
-            service.route_type = MODES[row.route_type]
+            service.mode = MODES[row.route_type]
             if row.geometry:
                 service.geometry = row.geometry.wkt
 

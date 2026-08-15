@@ -21,7 +21,7 @@ class SearchForm(forms.Form):
 
 
 class CheckboxSelectMultipleWithDefault(forms.CheckboxSelectMultiple):
-    default = []
+    default = ()
 
     def value_from_datadict(self, data, files, name):
         if name not in data:

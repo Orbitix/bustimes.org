@@ -1,5 +1,5 @@
 import hashlib
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from difflib import Differ
 from itertools import pairwise
 
@@ -8,11 +8,11 @@ from django.db.models import (
     DateTimeField,
     ExpressionWrapper,
     F,
+    IntegerField,
+    OuterRef,
     Q,
     Value,
     When,
-    OuterRef,
-    IntegerField,
 )
 from django.db.models.functions import Abs
 from django.utils import timezone
@@ -22,9 +22,9 @@ from .models import (
     Calendar,
     CalendarBankHoliday,
     CalendarDate,
+    Route,
     StopTime,
     Trip,
-    Route,
     Version,
 )
 
@@ -44,10 +44,10 @@ class log_time_taken:
         self.logger = logger
 
     def __enter__(self):
-        self.start = datetime.now()
+        self.start = datetime.now(UTC)
 
     def __exit__(self, _, __, ___):
-        self.logger.info(f"  ⏱️ {datetime.now() - self.start}")
+        self.logger.info(f"  ⏱️ {datetime.now(UTC) - self.start}")
 
 
 def get_routes(routes, when):

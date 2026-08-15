@@ -1,12 +1,12 @@
 import os
 import zipfile
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from functools import cache
 
 from django.contrib.gis.geos import GEOSGeometry
 from django.core.management.base import BaseCommand
 
-from busstops.models import DataSource, Service, StopPoint, Operator
+from busstops.models import DataSource, Operator, Service, StopPoint
 
 from ...models import (
     BankHoliday,
@@ -73,7 +73,7 @@ class Command(BaseCommand):
             self.source, _ = DataSource.objects.get_or_create(name=source_name)
 
             self.source.datetime = datetime.fromtimestamp(
-                os.path.getmtime(archive_name), timezone.utc
+                os.path.getmtime(archive_name), UTC
             )
 
             self.handle_archive(archive_name)
@@ -211,13 +211,7 @@ class Command(BaseCommand):
         calendar.summary = ",".join(summary)
         calendar.save()
 
-        if line[37:38] == b"A":
-            CalendarBankHoliday.objects.create(
-                operation=True,
-                bank_holiday=self.bank_holiday,
-                calendar=calendar,
-            )
-        elif line[37:38] == b"B":
+        if line[37:38] == b"A" or line[37:38] == b"B":
             CalendarBankHoliday.objects.create(
                 operation=True,
                 bank_holiday=self.bank_holiday,

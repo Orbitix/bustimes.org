@@ -69,7 +69,7 @@ class BusStopsAdminTests(TestCase):
     def test_everything(self):
         self.client.force_login(self.staff_user)
 
-        for model, model_admin in site._registry.items():
+        for model in site._registry:
             url = self.make_url(site, model, "changelist")
             response = self.client.get(url, {"q": "blah"})
             self.assertEqual(response.status_code, 200)
@@ -90,7 +90,7 @@ class BusStopsAdminTests(TestCase):
         )
         response = self.client.get("/admin/busstops/service/")
         self.assertEqual(
-            list(response.context["messages"])[0].message,
+            next(iter(response.context["messages"])).message,
             "merged <QuerySet [<Service: 129A - Frankby - Moreton - Liscard>]> into 129 - Frankby Cemetery - Liscard",
         )
 

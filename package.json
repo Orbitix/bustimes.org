@@ -52,6 +52,12 @@
       "engines": {
         "browsers": "Chrome 90"
       }
+    },
+    "firehose-map": {
+      "source": [
+        "frontend/js/firehose-map.ts"
+      ],
+      "distDir": "busstops/static/dist"
     }
   },
   "scripts": {

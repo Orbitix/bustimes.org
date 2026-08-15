@@ -1,8 +1,9 @@
-from django_filters import ChoiceFilter, FilterSet, ModelChoiceFilter
 from django.db.models import Q
-from django.forms.widgets import TextInput, NumberInput
-from vehicles.models import Vehicle, Operator
+from django.forms.widgets import NumberInput, TextInput
+from django_filters import ChoiceFilter, FilterSet, ModelChoiceFilter
+
 from accounts.models import User
+from vehicles.models import Operator, Vehicle
 
 
 class VehicleRevisionFilter(FilterSet):

@@ -3,9 +3,7 @@ def ad(request):
     if (
         "/edit" in path
         or path.endswith("/debug")
-        or path.startswith("/accounts/")
-        or path.startswith("/fares/")
-        or path.startswith("/sources/")
+        or path.startswith(("/accounts/", "/fares/", "/sources/"))
         or "/tickets" in path
     ):
         return {"ad": False}

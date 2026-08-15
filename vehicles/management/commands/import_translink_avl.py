@@ -1,4 +1,4 @@
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 
 from django.contrib.gis.geos import GEOSGeometry
 from django.db.models import Q
@@ -10,7 +10,7 @@ from ..import_live_vehicles import ImportLiveVehiclesCommand
 
 
 def parse_date(date):
-    return datetime.strptime(date, "%d.%m.%Y").date()
+    return datetime.strptime(date, "%d.%m.%Y").date()  # noqa: DTZ007
 
 
 class Command(ImportLiveVehiclesCommand):

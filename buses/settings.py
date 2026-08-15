@@ -18,7 +18,7 @@ CSRF_TRUSTED_ORIGINS = os.environ.get(
 CSRF_FAILURE_VIEW = "busstops.views.csrf_failure"
 
 TEST = "test" in sys.argv or "pytest" in sys.argv[0]
-DEBUG = bool(os.environ.get("DEBUG", False))
+DEBUG = bool(os.environ.get("DEBUG"))
 
 DEFAULT_FROM_EMAIL = '"bustimes.org" <bustimes.org@bustimes.org>'
 
@@ -32,7 +32,8 @@ if TEST:
     EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 INSTALLED_APPS = [
-    # "daphne",
+    "daphne",
+    "channels",
     "accounts",
     "busstops",
     "django.contrib.admin",
@@ -53,6 +54,7 @@ INSTALLED_APPS = [
     "email_obfuscator",
     "api",
     "photos",
+    "imagekit",
     "rest_framework",
     "django_filters",
     "simple_history",
@@ -116,7 +118,6 @@ ASGI_APPLICATION = "buses.asgi.application"
 DATABASES = {
     "default": dj_database_url.config(conn_max_age=None, conn_health_checks=True)
 }
-
 DATABASES["default"]["OPTIONS"] = {
     "application_name": os.environ.get("APPLICATION_NAME") or " ".join(sys.argv)[-63:],
     "connect_timeout": 9,
@@ -134,6 +135,10 @@ LOGIN_REDIRECT_URL = "/vehicles"
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
     "PAGE_SIZE": 100,
+    "DEFAULT_RENDERER_CLASSES": [
+        "django_orjson.rest_framework.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
@@ -163,10 +168,24 @@ HUEY = {
     },
 }
 
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
+            "CONFIG": {
+                "hosts": [{"address": REDIS_URL, "socket_timeout": 10}],
+            },
+        },
+    }
+
 STATIC_URL = "/static/"
 STATIC_ROOT = os.environ.get("STATIC_ROOT", BASE_DIR / "staticfiles")
 STORAGES = {
     "default": {
+        "BACKEND": "django.core.files.storage.InMemoryStorage",
+    }
+    if TEST or DEBUG
+    else {
         "BACKEND": "storages.backends.s3.S3Storage",
         "OPTIONS": {
             "region_name": "lon1",
@@ -243,11 +262,13 @@ if REDIS_URL and not TEST:
         "LOCATION": REDIS_URL,
         "KEY_PREFIX": os.environ.get("CACHE_KEY_PREFIX", ""),
         "OPTIONS": {
+            "pool_class": "buses.redis_pool.SharedConnectionPool",
             "socket_timeout": 3,
             "socket_connect_timeout": 2,
             "socket_keepalive": True,
             "health_check_interval": 30,
             "retry_on_timeout": True,
+            "max_connections": 40,
         },
     }
     if "default" not in CACHES:
@@ -271,20 +292,17 @@ FORMS_URLFIELD_ASSUME_HTTPS = True
 
 def traces_sampler(context):
     try:
-        url = context["wsgi_environ"]["RAW_URI"]
+        environ = context["wsgi_environ"]
+        if "QUERY_STRING" in environ and "__profile__" in environ["QUERY_STRING"]:
+            return 1
+        url = environ["PATH_INFO"]
     except KeyError:
         return 0
-    if "__profile__" in url:
-        return 1
-    if (
-        url == "/version"
-        or url.startswith("/vehicles.json")
-        or url.startswith("/stops.json")
-        or url.startswith("/static/")
-        or url.startswith("/journeys/")
+    if url == "/version" or url.startswith(
+        ("/vehicles.json", "/stops.json", "/static/", "/journeys/")
     ):
         return 0
-    if url.startswith("/stops/") or url.startswith("/services/"):
+    if url.startswith(("/stops/", "/services/")):
         return 0.00005
     if url.startswith("/vehicles"):
         return 0.00001
@@ -294,7 +312,6 @@ def traces_sampler(context):
 if not TEST:  # pragma: nocover
     if "SENTRY_DSN" in os.environ:
         import sentry_sdk
-
         from sentry_sdk.integrations.django import DjangoIntegration
         from sentry_sdk.integrations.huey import HueyIntegration
         from sentry_sdk.integrations.logging import ignore_logger
@@ -338,7 +355,7 @@ NTA_API_KEY = os.environ.get("NTA_API_KEY")  # Ireland
 ALLOW_VEHICLE_NOTES_OPERATORS = (
     "NATX",  # National Express
     "SCLK",  # Scottish Citylink
-    "FLIX",  #Flixbus
+    "FLIX",  # Flixbus
     "ie-526",  # Irish Citylink
     "ie-1178",  # Dublin Express
 )

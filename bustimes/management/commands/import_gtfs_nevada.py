@@ -1,25 +1,30 @@
 import logging
-
 from pathlib import Path
 
 import gtfs_kit
-
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Min, Subquery, OuterRef
+from django.db.models import Min, OuterRef, Subquery
 
-from busstops.models import DataSource, Operator, Service, StopPoint, ServiceColour
+from busstops.models import DataSource, Operator, Service, ServiceColour, StopPoint
 
 from ...download_utils import download_if_modified
+from ...gtfs_utils import MODES, do_route_links, get_calendars
 from ...models import Route, StopTime, Trip
-from ...gtfs_utils import get_calendars, MODES, do_route_links
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    def handle(self, *args, **options):
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Import data even if the GTFS feeds haven't changed",
+        )
+
+    def handle(self, force, *args, **options):
         path = settings.DATA_DIR / Path("rtcsnv_gtfs.zip")
 
         source, _ = DataSource.objects.get_or_create(name="RTCSNV")
@@ -27,13 +32,17 @@ class Command(BaseCommand):
 
         modified, last_modified = download_if_modified(path, source)
 
-        if not modified:
+        if not modified and not force:
             return  # no new data to import
         source.datetime = last_modified
 
         logger.info(f"{source} {last_modified}")
 
         feed = gtfs_kit.read_feed(path, dist_units="km")
+
+        feed.stop_times = feed.stop_times.fillna(
+            {"timepoint": 1, "pickup_type": 0, "drop_off_type": 0}
+        )
 
         operator = Operator.objects.get_or_create(noc="RTCSNV")[0]
 
@@ -76,10 +85,11 @@ class Command(BaseCommand):
         }
 
         for row in feed.get_routes(as_gdf=True).itertuples():
-            if row.route_id in existing_services:
-                service = existing_services[row.route_id]
+            if row.route_short_name in existing_services:
+                service = existing_services[row.route_short_name]
             else:
                 service = Service(line_name=row.route_short_name)
+                existing_services[row.route_short_name] = service
 
             if row.route_id in existing_routes:
                 route = existing_routes[row.route_id]
@@ -100,7 +110,7 @@ class Command(BaseCommand):
                 )
             service.colour = colours[(bg, fg)]
 
-            service.route_type = MODES[row.route_type]
+            service.mode = MODES[row.route_type]
             if row.geometry:
                 service.geometry = row.geometry.wkt
 

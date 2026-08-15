@@ -4,6 +4,7 @@ import datetime
 import logging
 import re
 from urllib.parse import urlencode, urlparse
+from zoneinfo import ZoneInfo
 
 import yaml
 from botocore.exceptions import NoCredentialsError
@@ -23,9 +24,10 @@ from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from timezone_field import TimeZoneField
 
-from bustimes.models import Route, TimetableDataSource, StopTime
+from bustimes.models import Route, StopTime, TimetableDataSource
 from bustimes.timetables import Timetable
 from bustimes.utils import get_descriptions
+
 from .fields import AutoSlugField
 
 TIMING_STATUS_CHOICES = (
@@ -56,7 +58,7 @@ class Region(models.Model):
     name = models.CharField(max_length=48)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ("name",)
 
     def __str__(self):
         return self.name
@@ -150,14 +152,14 @@ class Locality(SearchMixin, models.Model):
 
     class Meta:
         ordering = ("name",)
-        indexes = [
+        indexes = (
             GinIndex(fields=["search_vector"]),
             GinIndex(
                 fields=["name"],
                 opclasses=["gin_trgm_ops"],
                 name="locality_name_trgm",
             ),
-        ]
+        )
 
     def __str__(self):
         return self.name or self.id
@@ -217,7 +219,7 @@ class DataSource(models.Model):
     etag = models.CharField(max_length=255, blank=True)
 
     class Meta:
-        ordering = ["id"]
+        ordering = ("id",)
 
     def __str__(self):
         return self.name
@@ -310,7 +312,9 @@ class DataSource(models.Model):
             if timestamp.isdigit():
                 timestamp = int(timestamp)
                 if timestamp > 1600000000:
-                    date = datetime.datetime.fromtimestamp(int(timestamp))
+                    date = datetime.datetime.fromtimestamp(
+                        int(timestamp), tz=ZoneInfo("Europe/London")
+                    )
 
         if text:
             if url:
@@ -326,9 +330,7 @@ class DataSource(models.Model):
         return ""
 
     def older_than(self, when):
-        if not self.datetime or not when or self.datetime < when:
-            return True
-        return False
+        return bool(not self.datetime or not when or self.datetime < when)
 
     def get_s3_path(self):
         return f"source/{self.id}/{self.datetime.isoformat()}"
@@ -436,12 +438,8 @@ class StopPoint(models.Model):
 
     class Meta:
         ordering = ("common_name", "atco_code")
-        indexes = [
-            models.Index(Upper("naptan_code"), name="naptan_code"),
-        ]
-        constraints = [
-            models.UniqueConstraint(Upper("atco_code"), name="atco_code"),
-        ]
+        indexes = (models.Index(Upper("naptan_code"), name="naptan_code"),)
+        constraints = (models.UniqueConstraint(Upper("atco_code"), name="atco_code"),)
 
     def __str__(self):
         name = self.get_unqualified_name()
@@ -613,7 +611,7 @@ class Operator(SearchMixin, models.Model):
 
     class Meta:
         ordering = ("name",)
-        indexes = [GinIndex(fields=["search_vector"])]
+        indexes = (GinIndex(fields=["search_vector"]),)
 
     def __repr__(self):
         return f"{self.noc}: {self.name}"
@@ -780,11 +778,11 @@ class Service(models.Model):
     update_search_vector = SearchMixin.update_search_vector
 
     class Meta:
-        ordering = ["id"]
-        indexes = [
+        ordering = ("id",)
+        indexes = (
             models.Index(Upper("line_name"), name="line_name"),
             GinIndex(fields=["search_vector"]),
-        ]
+        )
 
     def __str__(self):
         line_name = self.get_line_name()
@@ -913,18 +911,19 @@ class Service(models.Model):
             ).values("service")
         )
 
-        if ":" not in self.service_code:
-            if match := re.match(r"^(?P<number>\d+)[A-Za-z]?$", self.line_name):
-                number = match.group("number")
-                ids = ids.union(
-                    Service.objects.filter(
-                        ~Q(id=self.id),
-                        source=self.source_id,
-                        current=True,
-                        operator__service=self,
-                        line_name__regex=rf"^{number}[A-Za-z]?$",
-                    ).values("id")
-                )
+        if ":" not in self.service_code and (
+            match := re.match(r"^(?P<number>\d+)[A-Za-z]?$", self.line_name)
+        ):
+            number = match.group("number")
+            ids = ids.union(
+                Service.objects.filter(
+                    ~Q(id=self.id),
+                    source=self.source_id,
+                    current=True,
+                    operator__service=self,
+                    line_name__regex=rf"^{number}[A-Za-z]?$",
+                ).values("id")
+            )
 
         services = (
             Service.objects.with_line_names()
@@ -974,10 +973,10 @@ class Service(models.Model):
                 detailed=detailed,
                 operators=operators,
             )
-        except (IndexError, UnboundLocalError, AssertionError) as e:
+        except (IndexError, UnboundLocalError, AssertionError):
             logger = logging.getLogger(__name__)
 
-            logger.exception(e)
+            logger.exception("error building timetable")
             return
 
         cache_key = [

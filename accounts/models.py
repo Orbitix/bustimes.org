@@ -1,7 +1,8 @@
+from uuid import uuid4
+
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 from django.urls import reverse
-from uuid import uuid4
 
 
 class CustomUserManager(UserManager):
@@ -41,7 +42,7 @@ class User(AbstractUser):
     objects = CustomUserManager()
 
     USERNAME_FIELD = "email"  # this was a bad idea
-    REQUIRED_FIELDS = ["username"]  # so that ./manage.py createsuperuser works
+    REQUIRED_FIELDS = ("username",)  # so that ./manage.py createsuperuser works
 
     def get_absolute_url(self):
         return reverse("user_detail", args=(self.id,))

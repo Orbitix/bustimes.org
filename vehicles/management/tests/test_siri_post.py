@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
@@ -37,7 +37,7 @@ class SiriPostTest(TestCase):
         ):
             with mock.patch(
                 "vehicles.management.commands.siri_vm_subscribe.cache.get",
-                return_value=[[datetime(2023, 12, 15, 8, 20, tzinfo=timezone.utc)]],
+                return_value=[[datetime(2023, 12, 15, 8, 20, tzinfo=UTC)]],
             ):
                 call_command(
                     "siri_vm_subscribe",
@@ -193,7 +193,7 @@ class SiriPostTest(TestCase):
                 ),
             ):
                 self.assertEqual(200, response.status_code)
-                self.assertEqual(response.text, """{"result": "ok"}""")
+                self.assertEqual(response.text, """{"result":"ok"}""")
 
             with self.assertRaises(KeyError):
                 self.client.post("/overland", data, content_type="application/json")

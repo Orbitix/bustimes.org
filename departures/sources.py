@@ -6,16 +6,22 @@ import requests
 import xmltodict
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Prefetch, prefetch_related_objects, IntegerField
+from django.db.models import (
+    Exists,
+    ExpressionWrapper,
+    F,
+    IntegerField,
+    OuterRef,
+    Prefetch,
+    prefetch_related_objects,
+)
 from django.db.models.functions import Coalesce
-from django.db.models import F, ExpressionWrapper, OuterRef, Exists
 from django.utils import timezone
 from xmltodict import unparse
 
 from bustimes.utils import get_stop_times
-from vehicles.models import VehicleJourney
 from disruptions.models import Call
-
+from vehicles.models import VehicleJourney
 
 TIMEZONE = ZoneInfo("Europe/London")
 
@@ -65,11 +71,9 @@ class RemoteDepartures(Departures):
 
     def get_request_params(self):
         """Return a dictionary of HTTP GET parameters"""
-        pass
 
     def get_request_headers(self):
         """Return a dictionary of HTTP headers"""
-        pass
 
     def get_request_kwargs(self):
         return {
@@ -85,11 +89,9 @@ class RemoteDepartures(Departures):
         if line_name:
             # try to find matching service (case-insensitively)
             line_name_lower = line_name.lower()
-            if service := self.services_by_name.get(line_name_lower):
-                return service
-
-            # FlixBus
-            elif service := self.services_by_name.get(f"uk{line_name_lower}"):
+            if (service := self.services_by_name.get(line_name_lower)) or (
+                service := self.services_by_name.get(f"uk{line_name_lower}")
+            ):
                 return service
 
         # fallback
@@ -120,10 +122,10 @@ class RemoteDepartures(Departures):
             except requests.exceptions.ReadTimeout:
                 self.set_poorly(60)  # back off for 1 minute
                 return
-            except requests.exceptions.RequestException as e:
+            except requests.exceptions.RequestException:
                 self.set_poorly(60)  # back off for 1 minute
                 logger = logging.getLogger(__name__)
-                logger.exception(e)
+                logger.exception("error getting departures")
                 return
 
             if response.ok:
@@ -362,7 +364,7 @@ class SiriSmDepartures(RemoteDepartures):
         return [self.get_row(data)]
 
     def get_response(self):
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat()
         request_xml = unparse(
             {
                 "Siri": {

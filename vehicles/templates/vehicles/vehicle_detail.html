@@ -30,6 +30,19 @@
 {% block content %}
 
 {% if vehicle %}
+    {% with photos=vehicle.photo_set.all %}{% if photos %}
+        <figure class="vehicle-photo">
+            <img src="{{ photos.0.image_320.url }}" />
+            {% if photos.0.credit %}
+                <figcaption>
+                    {% if photos.0.url %}
+                        <a href="{{ photos.0.url }}">{{ photos.0.credit }}</a>
+                    {% else %}{{ photos.0.credit }}{% endif %}
+                </figcaption>
+            {% endif %}
+        </figure>
+    {% endif %}{% endwith %}
+
     <h1>
         {% if vehicle.reg %}
             {% if vehicle.fleet_code or vehicle.fleet_number %}
@@ -94,12 +107,20 @@
 
 {% load static %}
 
-<div id="journeys" hx-history="false">
+<div id="journeys" data-hx-trigger="false">
 
 {% if date %}
     <script src="{% static 'js/htmx.org/htmx.min.js' %}"></script>
 
-    <form class="timetable-date" autocomplete="off" hx-trigger="change" hx-get="{{ request.path }}" hx-select="#journeys" hx-target="#journeys" hx-indicator="#journeys" hx-swap="outerHTML" hx-push-url="true">
+    <form class="timetable-date" autocomplete="off"
+        data-hx-trigger="change"
+        data-hx-get="{{ request.path }}"
+        data-hx-select="#journeys"
+        data-hx-target="#journeys"
+        data-hx-indicator="#journeys"
+        data-hx-swap="outerHTML"
+        data-hx-trigger="true"
+    >
         {% if dates %}
             <select name="date" aria-label="Date">
                 {% for option in dates %}
@@ -154,7 +175,7 @@
                     <a href="{% if journey.locations is not False %}/journeys/{{ journey.id }}{% else %}{{ journey.trip.get_absolute_url }}{% endif %}">{{ journey.trip }}</a>
                 </td>
             {% else %}
-                <td class="tabular">{{ journey.datetime|time:"H:i" }}{% if journey.datetime.date > date %}⁺¹{% endif %}</td>
+                <td class="tabular">{{ journey.datetime|time:"H:i" }}{% if journey.datetime|date:"Y-m-d" > date.isoformat %}⁺¹{% endif %}</td>
             {% endif %}
             <td>{% firstof journey.destination journey.direction %}</td>
             {% if journey.locations is not False %}
@@ -191,19 +212,12 @@
 </div>
 
 {% if form %}
-
-    {% for photo in vehicle.photo_set.all %}
-        <p><img src="{{ photo.image_1200_630.url }}" width="600" height="315" alt=""></p>
-    {% endfor %}
-
-    <form action="{{ request.path }}" method="POST">
+    <form action="{{ request.path }}" method="POST" enctype="multipart/form-data">
         {{ form.as_p }}
         {% csrf_token %}
         <input type="submit">
     </form>
-
 {% endif %}
-
 
 <div id="history"></div>
 

@@ -1,9 +1,9 @@
 import logging
 from pathlib import Path
+from zipfile import BadZipFile
+
 import gtfs_kit
 import pandas as pd
-from shapely.errors import EmptyPartError
-from zipfile import BadZipFile
 from django.conf import settings
 from django.contrib.gis.geos import GEOSGeometry
 from django.core.management.base import BaseCommand
@@ -11,24 +11,20 @@ from django.db import connection
 from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.functions import Now
 from django.utils.dateparse import parse_duration
+from shapely.errors import EmptyPartError
 
 from busstops.models import AdminArea, DataSource, Operator, Region, Service, StopPoint
 
 from ...download_utils import download_if_modified
-from ...utils import log_time_taken
+from ...gtfs_utils import MODES, do_route_links, get_calendars
 from ...models import Route, Trip
-from ...gtfs_utils import get_calendars, MODES, do_route_links
+from ...utils import log_time_taken
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--force",
-            action="store_true",
-            help="Import data even if the GTFS feeds haven't changed",
-        )
         parser.add_argument("collections", nargs="*", type=str)
 
     def handle_operator(self, line):
@@ -221,8 +217,7 @@ class Command(BaseCommand):
             trip.destination = stops.get(line.stop_id)
             trip.end = line.arrival_time
 
-        for trip_id in trips:
-            trip = trips[trip_id]
+        for trip_id, trip in trips.items():
             if trip.start is None:
                 logger.warning(f"trip {trip_id} has no stop times")
                 trips[trip_id] = None
@@ -342,7 +337,7 @@ class Command(BaseCommand):
                 try:
                     with log_time_taken(logger):
                         self.handle_zipfile(path)
-                except (OSError, BadZipFile) as e:
-                    logger.exception(e)
+                except (OSError, BadZipFile):
+                    logger.exception("error handling zipfile")
 
             # sleep(2)

@@ -3,7 +3,8 @@ from django.test import TestCase
 from vcr import use_cassette
 
 from busstops.models import Operator, Service
-from .translinkni import translink_disruptions, Situation
+
+from .translinkni import Situation, translink_disruptions
 
 
 class TranslinkNorthernIrelandTest(TestCase):

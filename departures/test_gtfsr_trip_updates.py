@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 
 from busstops.models import DataSource, Operator, Service, StopPoint, StopUsage
 from bustimes.models import Calendar, Route, StopTime, Trip
+
 from . import gtfsr
 
 
@@ -128,9 +129,6 @@ class GTFSRTTest(TestCase):
             self.assertEqual(response.headers["Content-Type"], "application/json")
 
             response = self.client.get("/trip_updates/foo.json")
-            self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
-
-            response = self.client.get("/trip_updates?feed_name=foo")
             self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
 
             response = self.client.get("/stops/8250DB000429?date=2022-05-04&time=05:00")

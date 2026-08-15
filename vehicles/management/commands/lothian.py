@@ -1,7 +1,8 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from django.db.models import Q
+
 from django.contrib.gis.geos import GEOSGeometry
+from django.db.models import Q
 
 from busstops.models import Service
 

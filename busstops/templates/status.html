@@ -86,7 +86,7 @@
 
 <h2>AVL</h2>
 
-{% for key, items in bod_avl_status.items %}
+{% for key, items in statuses %}
 <details>
 <summary>{{ key }}</summary>
 
@@ -116,31 +116,6 @@
 </table>
 </details>
 {% endfor %}
-
-{% for name, status in statuses %}<details>
-    <summary>{{ name }}</summary>
-
-    <table>
-        <thead class="sticky">
-            <tr>
-                <th scope="col">Fetched</th>
-                <th scope="col">Items</th>
-                <th scope="col">Changed items</th>
-                <th scope="col">Time taken</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in status %}
-                <tr>
-                    <td>{{ item.fetched_at|date:'H:i:s' }}</td>
-                    <td>{{ item.total_items }}</td>
-                    <td>{{ item.changed_items }}</td>
-                    <td>{{ item.time_taken }}</td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</details>{% endfor %}
 
 <h2>Timetables</h2>
 

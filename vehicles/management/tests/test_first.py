@@ -3,19 +3,18 @@ from unittest import mock
 
 import fakeredis
 import vcr
-from django.test import TestCase
 from django.core.management import call_command
-from django.db import IntegrityError
+from django.test import TransactionTestCase
 
 from busstops.models import DataSource, Operator, Service
-from ..commands.import_first import Command
+
 from ...models import VehicleJourney
+from ..commands.import_first import Command
 
 
-class FirstTest(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.source = DataSource.objects.create(
+class FirstTest(TransactionTestCase):
+    def setUp(self):
+        self.source = DataSource.objects.create(
             name="First", url="https://example.com/socket_information"
         )
         o = Operator.objects.create(noc="BDGR", name="Badgerline")
@@ -33,8 +32,7 @@ class FirstTest(TestCase):
             mock.patch(
                 "vehicles.management.commands.import_first.connect"
             ) as websocket_connect,
-            self.assertNumQueries(3),
-            self.assertRaises(IntegrityError),
+            self.assertRaises(StopAsyncIteration),
         ):
             websocket_connect.return_value.__aenter__.return_value.recv.side_effect = [
                 "",

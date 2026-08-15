@@ -3,8 +3,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import pandas as pd
 import gtfs_kit
+import pandas as pd
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -14,13 +14,13 @@ from django.utils.dateparse import parse_duration
 from busstops.models import DataSource, Operator, Service, StopPoint
 
 from ...download_utils import download_if_modified
+from ...gtfs_utils import MODES, RouteType, do_route_links, get_calendars
 from ...models import Route, StopTime, Trip
-from ...gtfs_utils import get_calendars, MODES, do_route_links
 
 logger = logging.getLogger(__name__)
 
 
-MODES = {**MODES, 3: "coach"}
+MODES = {**MODES, RouteType.bus: "coach"}
 
 
 def get_stoppoint(stop, source):
@@ -94,13 +94,6 @@ class Command(BaseCommand):
             for calendar in calendars.values()
         }
 
-        geometries = {}
-        for row in feed.get_routes(as_gdf=True).itertuples():
-            if row.geometry:
-                geometries[row.route_id] = row.geometry.wkt
-            else:
-                logger.info("route %s has no geometry", row.route_id)
-
         for row in feed.routes.itertuples():
             line_name = row.route_id
 
@@ -122,7 +115,6 @@ class Command(BaseCommand):
             service.current = True
             service.colour_id = operator.colour_id
             service.source = source
-            service.geometry = geometries.get(row.route_id)
             service.region_id = "GB"
             service.mode = MODES[row.route_type]
 
@@ -254,6 +246,7 @@ class Command(BaseCommand):
             for service in source.service_set.filter(current=True):
                 service.do_stop_usages()
                 service.update_search_vector()
+                service.update_geometry()
 
             logger.info(
                 source.route_set.exclude(id__in=[route.id for route in routes]).delete()

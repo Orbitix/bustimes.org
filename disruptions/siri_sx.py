@@ -1,17 +1,16 @@
+import io
 import logging
 import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime
+
+import requests
 from django.db.backends.postgresql.psycopg_any import DateTimeTZRange
 from django.db.models import Q
 
-import io
-import zipfile
-
-import requests
-
 from busstops.models import DataSource, Operator, Service, StopPoint
-from .models import Consequence, Link, Situation, ValidityPeriod
 
+from .models import Consequence, Link, Situation, ValidityPeriod
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +141,8 @@ def handle_item(item: ET.Element, source: DataSource, current_situations: dict):
             operator_ref = operator.findtext("OperatorRef")
             try:
                 consequence.operators.add(*get_operators(operator_ref))
-            except Operator.DoesNotExist as e:
-                logger.exception(e)
+            except Operator.DoesNotExist:
+                logger.exception("operator %s does not exist", operator_ref)
 
     return situation.id
 

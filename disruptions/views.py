@@ -1,13 +1,14 @@
 import xml.etree.ElementTree as ET
 
 from django.db.models import Prefetch
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.utils.html import mark_safe
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import XmlLexer
 
 from busstops.models import Service, StopPoint
+
 from .models import Situation
 
 

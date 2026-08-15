@@ -352,10 +352,14 @@ class ImportTransXChangeTest(TestCase):
         self.assertEqual(
             cm.output,
             [
-                "WARNING:bustimes.management.commands.import_transxchange:"
-                "90079682980 090079682980",
-                "WARNING:bustimes.management.commands.import_transxchange:"
-                "{'NationalOperatorCode': 'SCMB', 'OperatorCode': 'SCC', 'OperatorShortName': 'SCC'}",
+                (
+                    "WARNING:bustimes.management.commands.import_transxchange:"
+                    "90079682980 090079682980"
+                ),
+                (
+                    "WARNING:bustimes.management.commands.import_transxchange:"
+                    "{'NationalOperatorCode': 'SCMB', 'OperatorCode': 'SCC', 'OperatorShortName': 'SCC'}"
+                ),
             ],
         )
 
@@ -503,7 +507,7 @@ class ImportTransXChangeTest(TestCase):
             str(grouping.rows[11].times[15:20]), "[09:24, 09:47, 15:47, 16:07, 16:12]"
         )
 
-        feet = list(grouping.column_feet.values())[0]
+        feet = next(iter(grouping.column_feet.values()))
         self.assertEqual(feet[0].span, 9)
         self.assertEqual(feet[1].span, 2)
         self.assertEqual(feet[2].span, 24)
@@ -640,7 +644,7 @@ class ImportTransXChangeTest(TestCase):
         )
 
         # Has some journeys that operate on 1 May 2017
-        with time_machine.travel(date(2017, 4, 28)):
+        with time_machine.travel("2017-04-28T00:00:00Z"):
             response = self.client.get(service.get_absolute_url())
         timetable = response.context_data["timetable"]
         self.assertEqual(timetable.date, date(2017, 5, 1))
@@ -791,8 +795,10 @@ class ImportTransXChangeTest(TestCase):
 
         self.assertEqual(
             [
-                "WARNING:bustimes.management.commands.import_transxchange:{'NationalOperatorCode': 'SBLB', "
-                "'OperatorCode': 'BLB', 'OperatorShortName': 'Stagecoach North Scotlan'}"
+                (
+                    "WARNING:bustimes.management.commands.import_transxchange:{'NationalOperatorCode': 'SBLB', "
+                    "'OperatorCode': 'BLB', 'OperatorShortName': 'Stagecoach North Scotlan'}"
+                )
             ],
             cm.output,
         )
@@ -915,8 +921,10 @@ class ImportTransXChangeTest(TestCase):
         self.assertEqual(
             cm.output,
             [
-                "WARNING:bustimes.management.commands.import_transxchange:{'NationalOperatorCode': 'COMT', "
-                "'OperatorCode': 'COMT', 'OperatorShortName': 'Compass Travel'}"
+                (
+                    "WARNING:bustimes.management.commands.import_transxchange:{'NationalOperatorCode': 'COMT', "
+                    "'OperatorCode': 'COMT', 'OperatorShortName': 'Compass Travel'}"
+                )
             ],
         )
 
@@ -943,9 +951,11 @@ class ImportTransXChangeTest(TestCase):
         self.assertEqual(
             cm.output,
             [
-                "WARNING:bustimes.management.commands.import_transxchange:{'NationalOperatorCode': 'YEOC', "
-                "'OperatorCode': 'YEC', 'OperatorShortName': 'Yeomans Travel', 'OperatorNameOnLicence': 'Yeomans Travel', "
-                "'TradingName': 'Yeomans Travel'}"
+                (
+                    "WARNING:bustimes.management.commands.import_transxchange:{'NationalOperatorCode': 'YEOC', "
+                    "'OperatorCode': 'YEC', 'OperatorShortName': 'Yeomans Travel', 'OperatorNameOnLicence': 'Yeomans Travel', "
+                    "'TradingName': 'Yeomans Travel'}"
+                )
             ],
         )
 
@@ -954,7 +964,7 @@ class ImportTransXChangeTest(TestCase):
 
         self.assertEqual(26, len(timetable.groupings[0].rows))
 
-        feet = list(timetable.groupings[0].column_feet.values())[0]
+        feet = next(iter(timetable.groupings[0].column_feet.values()))
 
         self.assertEqual(3, feet[0].span)
         self.assertEqual(1, feet[1].span)

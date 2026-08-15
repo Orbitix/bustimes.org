@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib.gis.db import models
 from imagekit.models import ImageSpecField
-from imagekit.processors import ResizeToFill
+from imagekit.processors import ResizeToFill, ResizeToFit
 
 
 class Photo(models.Model):
@@ -9,6 +9,18 @@ class Photo(models.Model):
     image_1200_630 = ImageSpecField(
         source="image",
         processors=[ResizeToFill(1200, 630)],
+        format="JPEG",
+        options={"quality": 60},
+    )
+    image_1200 = ImageSpecField(
+        source="image",
+        processors=[ResizeToFit(1200, upscale=False)],
+        format="JPEG",
+        options={"quality": 60},
+    )
+    image_320 = ImageSpecField(
+        source="image",
+        processors=[ResizeToFit(320, upscale=False)],
         format="JPEG",
         options={"quality": 60},
     )
@@ -36,3 +48,8 @@ class Photo(models.Model):
 
     def __str__(self):
         return self.caption
+
+    def get_absolute_url(self):
+        if vehicle := self.vehicles.first():
+            return vehicle.get_absolute_url()
+        return ""

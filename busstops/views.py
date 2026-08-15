@@ -2,9 +2,10 @@
 
 import csv
 import datetime
-import os
 import logging
+import os
 from http import HTTPStatus
+from itertools import groupby
 from urllib.parse import urlencode
 
 import requests
@@ -13,21 +14,19 @@ from django.contrib.auth.models import AnonymousUser
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.postgres.aggregates import ArrayAgg, BoolOr
-from itertools import groupby
 from django.contrib.postgres.search import SearchHeadline, SearchQuery, SearchRank
 from django.contrib.sitemaps import Sitemap
 from django.core.cache import cache
 from django.core.mail import EmailMessage
 from django.core.paginator import Paginator
 from django.db import connection
-from django.db.models import F, OuterRef, Prefetch, Q, When, Case, Value
+from django.db.models import Case, F, OuterRef, Prefetch, Q, Value, When
 from django.db.models.functions import Coalesce, Now
 from django.http import (
     Http404,
     HttpResponse,
     HttpResponseBadRequest,
     HttpResponseRedirect,
-    JsonResponse,
     StreamingHttpResponse,
 )
 from django.shortcuts import get_object_or_404, redirect, render
@@ -40,11 +39,12 @@ from django.views.csrf import csrf_failure as django_csrf_failure
 from django.views.decorators.cache import cache_control
 from django.views.decorators.http import last_modified
 from django.views.generic.detail import DetailView
+from django_orjson.http import JsonResponse
 from redis.exceptions import ConnectionError
 from sql_util.utils import Exists, SubqueryMax, SubqueryMin
 from ukpostcodeutils import validation
 
-from bustimes.models import Trip, StopTime
+from bustimes.models import StopTime, Trip
 from departures import live
 from disruptions.models import Consequence, Situation
 from fares.models import FareTable
@@ -68,6 +68,8 @@ from .models import (
 )
 from .utils import get_bounding_box
 
+logger = logging.getLogger(__name__)
+
 operator_has_current_services = Exists("service", filter=Q(service__current=True))
 operator_has_current_services_or_vehicles = operator_has_current_services | Exists(
     "vehicle", filter=Q(withdrawn=False, latest_journey__isnull=False)
@@ -75,7 +77,7 @@ operator_has_current_services_or_vehicles = operator_has_current_services | Exis
 
 
 def get_colours(services):
-    colours = set(service.colour_id for service in services if service.colour_id)
+    colours = {service.colour_id for service in services if service.colour_id}
     if colours:
         return ServiceColour.objects.filter(id__in=colours)
 
@@ -227,7 +229,7 @@ def not_found(request, exception):
 
 
 def csrf_failure(request, reason=""):
-    logging.warning("CSRF failure: %s", reason)
+    logger.warning("CSRF failure: %s", reason)
     if (
         request.resolver_match
         and request.resolver_match.url_name == "login"
@@ -350,24 +352,24 @@ def status(request):
         "sources": DataSource.objects.filter(
             name__in=["National Operator Codes", "NPTG", "NaPTAN", "Irish NaPTAN"]
         ),
-        "bod_avl_status": {},
     }
 
-    for key in ("bod_avl", "Transport_for_Wales", "Bus_Open_Data", "Todd's_Travel"):
-        key = f"{key}_status"
-        if status := cache.get(key):
-            context["bod_avl_status"][key] = status
-
     context["statuses"] = cache.get_many(
-        [
-            "Realtime_Transport_Operators_status",
-            "Irish_Citylink_status",
-            "Translink_status",
-            "Stagecoach_status",
-            "Ember_status",
-            "TfE_status",
-            "jersey_status",
-        ]
+        f"{key}_status"
+        for key in (
+            "bod_avl",
+            "Transport_for_Wales",
+            "Bus_Open_Data",
+            "Todd's_Travel",
+            "Ember",
+            "Realtime_Transport_Operators",
+            "FlixBus",
+            "Irish_Citylink",
+            "Translink",
+            "Stagecoach",
+            "TfE",
+            "jersey",
+        )
     ).items()
 
     return render(
@@ -455,11 +457,11 @@ def stops_mvt(request, z, x, y):
 
 
 def stats(request):
-    return JsonResponse(cache.get("vehicle-tracking-stats", []), safe=False)
+    return JsonResponse(cache.get("vehicle-tracking-stats", []))
 
 
 def timetable_source_stats(request):
-    return JsonResponse(cache.get("timetable-source-stats", []), safe=False)
+    return JsonResponse(cache.get("timetable-source-stats", []))
 
 
 @cache_control(max_age=3600)
@@ -768,13 +770,13 @@ def get_departures_context(stop, services, form_data, stops=None) -> dict:
     # for stop area departures - indicate child stop/platform number
     if stops:
         context["stoparea"] = stop
-        for stop in stops:
-            if " " in stop.indicator:
-                prefix = stop.indicator.split(" ")[0].title()
+        for child_stop in stops:
+            if " " in child_stop.indicator:
+                prefix = child_stop.indicator.split(" ")[0].title()
                 context["indicator_prefix"] = prefix  # Stand, Stance, Stop
                 break
-        if "breadcrumb" in context and stop.locality:
-            context["breadcrumb"] += [stop.locality.parent, stop.locality]
+        if "breadcrumb" in context and child_stop.locality:
+            context["breadcrumb"] += [child_stop.locality.parent, child_stop.locality]
 
         stops_dict = {stop.pk: stop for stop in stops}
 
@@ -827,6 +829,13 @@ class StopPointDetailView(DetailView):
 
         if not (self.object.active or context["services"]):
             return context
+
+        if services and not any(context["breadcrumb"]):
+            operators = Operator.objects.filter(service__in=services).distinct()
+            if len(operators) == 1:
+                context["breadcrumb"] = [operators[0]]
+                if len(services) == 1:
+                    context["breadcrumb"].append(services[0])
 
         context.update(get_departures_context(self.object, services, self.request.GET))
 
@@ -1123,7 +1132,7 @@ class ServiceDetailView(DetailView):
 
         try:
             service = super().get_object()
-        except Http404 as e:
+        except Http404:
             slug = self.kwargs["slug"]
 
             service = services.filter(service_code=slug).first()
@@ -1139,7 +1148,7 @@ class ServiceDetailView(DetailView):
                 ).first()
 
             if not service:
-                raise e
+                raise
 
         if not service.current:
             alternative = None
@@ -1671,7 +1680,7 @@ def search(request):
                         .distinct()
                         .annotate(distance=Distance("latlong", point))
                         .order_by("distance")
-                        .defer("latlong")[:20]
+                        .defer("latlong")[:6]
                     ),
                 }
 

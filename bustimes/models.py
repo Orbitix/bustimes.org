@@ -48,9 +48,7 @@ class Version(models.Model):
     current = models.BooleanField(default=True)
 
     class Meta:
-        indexes = [
-            models.Index(fields=("source", "start_date", "end_date")),
-        ]
+        indexes = (models.Index(fields=("source", "start_date", "end_date")),)
 
     def __str__(self):
         return self.name
@@ -88,7 +86,7 @@ class Route(models.Model):
 
     class Meta:
         unique_together = ("source", "code")
-        indexes = [
+        indexes = (
             models.Index(fields=("start_date", "end_date")),
             models.Index(
                 fields=("source", "service_code"),
@@ -96,7 +94,7 @@ class Route(models.Model):
                 name="route_source_service_code",
             ),
             models.Index(Upper("line_name"), name="route_line_name"),
-        ]
+        )
 
     def __str__(self):
         return " – ".join(
@@ -145,11 +143,11 @@ class BankHolidayDate(models.Model):
     )
 
     class Meta:
-        constraints = [
+        constraints = (
             models.UniqueConstraint(
                 fields=["bank_holiday", "date"], name="unique_bank_holiday_date"
-            )
-        ]
+            ),
+        )
 
 
 class CalendarBankHoliday(models.Model):
@@ -194,21 +192,22 @@ class Calendar(models.Model):
     )
 
     def contains(self, date):
-        if not self.start_date or self.start_date <= date:
-            if not self.end_date or self.end_date >= date:
-                return True
+        if (not self.start_date or self.start_date <= date) and (
+            not self.end_date or self.end_date >= date
+        ):
+            return True
 
     class Meta:
-        indexes = [models.Index(fields=["start_date", "end_date"])]
+        indexes = (models.Index(fields=["start_date", "end_date"]),)
 
     def is_sufficiently_simple(self, today, future) -> bool:
-        if all(
-            date.start_date > future or date.end_date and date.end_date < today
-            for date in self.calendardate_set.all()
-        ):
-            if str(self):
-                return True
-        return False
+        return bool(
+            all(
+                date.start_date > future or date.end_date and date.end_date < today
+                for date in self.calendardate_set.all()
+            )
+            and str(self)
+        )
 
     def allows(self, date) -> bool:
         if not self.contains(date):
@@ -252,7 +251,7 @@ class Calendar(models.Model):
         start_date = self.start_date
         end_date = self.end_date
 
-        for i in range(0, 6):
+        for i in range(6):
             if not self.allows(start_date):
                 start_date += timedelta(days=1)
 
@@ -266,7 +265,7 @@ class Calendar(models.Model):
                     # "until 30 may 2020, but not from 20 may to 30 may" - simplify to "until 19 may"
                     end_date = calendar_date.start_date - timedelta(days=1)
 
-            for i in range(0, 6):
+            for i in range(6):
                 if not self.allows(end_date):
                     end_date -= timedelta(days=1)
 
@@ -338,10 +337,10 @@ class CalendarDate(models.Model):
     contains = Calendar.contains
 
     class Meta:
-        indexes = [
+        indexes = (
             models.Index(fields=["calendar", "operation", "special"]),
             models.Index(fields=["calendar", "start_date", "end_date", "operation"]),
-        ]
+        )
 
     def __str__(self):
         string = str(self.start_date)
@@ -399,7 +398,7 @@ class Trip(models.Model):
         return time_datetime(self.end, date, tzinfo)
 
     class Meta:
-        indexes = [
+        indexes = (
             models.Index(fields=["route", "start", "end"]),
             models.Index(
                 fields=["vehicle_journey_code"],
@@ -416,7 +415,7 @@ class Trip(models.Model):
                 condition=Q(block__isnull=False),
                 name="bustimes_trip_block",
             ),
-        ]
+        )
 
     def copy(self, start):
         difference = start - self.start
@@ -510,7 +509,7 @@ class StopTime(models.Model):
 
     class Meta:
         ordering = ("id",)
-        indexes = [
+        indexes = (
             models.Index(
                 fields=["stop", "departure"],
                 include=["trip"],
@@ -521,7 +520,7 @@ class StopTime(models.Model):
                 fields=["trip", "id"],
                 name="stoptime_trip_id",
             ),
-        ]
+        )
 
     def __str__(self):
         return format_timedelta(self.arrival_or_departure())

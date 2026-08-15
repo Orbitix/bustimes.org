@@ -2,9 +2,9 @@ from http import HTTPStatus
 from unittest.mock import patch
 
 from django.core import mail
-from django.test import TransactionTestCase, override_settings, Client
+from django.test import Client, TransactionTestCase, override_settings
 
-from .models import User, Invitation
+from .models import Invitation, User
 
 
 class RegistrationTest(TransactionTestCase):

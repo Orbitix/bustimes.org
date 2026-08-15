@@ -1,8 +1,8 @@
 import difflib
 import xml.etree.ElementTree as ET
-import requests
+from datetime import UTC, datetime, timedelta
 
-from datetime import datetime, timedelta, timezone
+import requests
 from django.core.management.base import BaseCommand
 from django.db.transaction import atomic
 from django.utils.timezone import localtime
@@ -10,8 +10,9 @@ from django.utils.timezone import localtime
 from busstops.models import DataSource
 from bustimes.models import Trip
 from bustimes.utils import get_calendars
+
+from ...models import AffectedJourney, Call, Situation
 from ...siri_sx import get_period
-from ...models import Situation, AffectedJourney, Call
 
 
 def get_trip(avj):
@@ -83,7 +84,7 @@ def handle_situation(element, source, current_situations):
     situation.created_at = datetime.fromisoformat(element.findtext("CreationTime"))
     # if created_at is naive, assume it's in UTC
     if not situation.created_at.tzinfo:
-        situation.created_at = situation.created_at.replace(tzinfo=timezone.utc)
+        situation.created_at = situation.created_at.replace(tzinfo=UTC)
 
     vps = element.findall("ValidityPeriod")
     assert len(vps) == 1
@@ -102,7 +103,7 @@ def handle_situation(element, source, current_situations):
                 if trip.start.days:
                     date -= timedelta(days=1)
 
-                journey, created = AffectedJourney.objects.update_or_create(
+                journey, _created = AffectedJourney.objects.update_or_create(
                     {
                         "condition": element.findtext(
                             "Consequences/Consequence/Condition"

@@ -41,7 +41,7 @@ class ScheduledDeparturesTest(TestCase):
                 StopTime(
                     trip=cls.trip, sequence=i, stop_id="230ABCDE", departure="24:10:00"
                 )
-                for i in range(0, 12)
+                for i in range(12)
             ]
         )
 

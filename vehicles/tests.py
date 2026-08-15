@@ -1,11 +1,11 @@
+from datetime import datetime
 from http import HTTPStatus
 from unittest.mock import patch
 
 import fakeredis
 import time_machine
-from datetime import datetime
-from django.contrib.gis.geos import Point
 from django.contrib.auth.models import Permission
+from django.contrib.gis.geos import Point
 from django.test import TestCase, override_settings
 
 from accounts.models import User
@@ -475,7 +475,7 @@ class VehiclesTests(TestCase):
             follow=True,
         )
         self.assertEqual(
-            list(response.context["messages"])[0].message,
+            next(iter(response.context["messages"])).message,
             "You can only merge liveries that are the same",
         )
 
@@ -495,7 +495,7 @@ class VehiclesTests(TestCase):
             },
             follow=True,
         )
-        self.assertEqual(list(response.context["messages"])[0].message, "Merged")
+        self.assertEqual(next(iter(response.context["messages"])).message, "Merged")
 
     def test_vehicle_type_admin(self):
         self.client.force_login(self.staff_user)

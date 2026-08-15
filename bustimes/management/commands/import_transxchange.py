@@ -8,23 +8,24 @@ import datetime
 import hashlib
 import logging
 import os
-import sys
-from pathlib import Path
 import re
+import sys
 import zipfile
 from functools import cache
+from pathlib import Path
 
-from haversine import Unit, haversine
-from tqdm import tqdm
-
-from django.core.management.base import BaseCommand, CommandError
 from django.contrib.gis.geos import GEOSGeometry, Point
+from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError
 from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.functions import Now, Upper
 from django.utils.timezone import localdate
+from haversine import Unit, haversine
 from titlecase import titlecase
+from tqdm import tqdm
+from txc import TransXChange
 
+from busstops.management.commands.naptan_new import get_stop
 from busstops.models import (
     DataSource,
     Operator,
@@ -34,9 +35,7 @@ from busstops.models import (
     StopPoint,
     StopUsage,
 )
-from busstops.management.commands.naptan_new import get_stop
-from busstops.utils import get_datetime
-from txc import TransXChange
+from busstops.utils import get_coord_transform, get_datetime
 from vehicles.models import get_text_colour
 from vosa.models import Registration
 
@@ -149,8 +148,8 @@ def get_operator_by(scheme, code):
             )
         except Operator.DoesNotExist:
             pass
-        except Operator.MultipleObjectsReturned as e:
-            logger.exception(e)
+        except Operator.MultipleObjectsReturned:
+            logger.exception("multiple operators found for %s %s", scheme, code)
 
 
 def get_open_data_operators():
@@ -241,11 +240,11 @@ def get_route_links(journeys, transxchange: TransXChange):
 
 def route_link_is_dodgy(point: Point, stop: StopPoint, context: str) -> bool:
     if point.srid and point.srid != 4326:
-        point.transform(4326)
+        point.transform(get_coord_transform(point.srid))
 
     if stop.latlong:
         if stop.latlong.srid and stop.latlong.srid != 4326:
-            stop.latlong.transform(4326)
+            stop.latlong.transform(get_coord_transform(stop.latlong.srid))
         distance = stop.latlong.distance(point)
         if distance > 0.02:
             # stop location roughly more than 1 km from start/end of RouteLink
@@ -480,9 +479,8 @@ class Command(BaseCommand):
         """
 
         operator_code = operator_element.findtext("NationalOperatorCode")
-        if not operator_code:
-            if not self.source.is_tnds() or self.source.name == "L":
-                operator_code = operator_element.findtext("OperatorCode")
+        if not operator_code and (not self.source.is_tnds() or self.source.name == "L"):
+            operator_code = operator_element.findtext("OperatorCode")
 
         if operator_code:
             if self.source.name == "L":
@@ -650,7 +648,7 @@ class Command(BaseCommand):
         self.set_region(basename)
 
         self.source.datetime = datetime.datetime.fromtimestamp(
-            os.path.getmtime(archive_path), datetime.timezone.utc
+            os.path.getmtime(archive_path), datetime.UTC
         )
 
         if not filenames:
@@ -878,7 +876,7 @@ class Command(BaseCommand):
 
         return calendar
 
-    @cache
+    @cache  # noqa: B019 - one Command instance per process run
     def get_note(self, note_code=None, note_text=None):
         return Note.objects.get_or_create(
             code=note_code or "", text=(note_text or "")[:255]
@@ -939,13 +937,6 @@ class Command(BaseCommand):
 
             if journey.block and journey.block.code:
                 trip.block = journey.block.code
-                if (
-                    trip.operator
-                    and trip.block[:1] == "B"
-                    and trip.block < "B99"
-                    and trip.operator.noc in ("SNDR", "OBUS", "LYNX")
-                ):
-                    trip.block = None
             elif (
                 journey.journey_pattern
                 and journey.journey_pattern.block
@@ -1023,32 +1014,31 @@ class Command(BaseCommand):
                 note = self.get_note(note_text=operator_notes[operator_ref])
                 trip_notes.append(Trip.notes.through(trip=trip, note=note))
 
-            if journey.frequency_interval:
-                if len(journeys) > i + 1:
-                    next_journey = journeys[i + 1]
-                    if journey.frequency_interval != next_journey.frequency_interval:
-                        logger.info(
-                            "frequency: %s - every %s - %s",
-                            trip.start,
-                            journey.frequency_interval,
-                            journey.frequency_end_time,
+            if journey.frequency_interval and len(journeys) > i + 1:
+                next_journey = journeys[i + 1]
+                if journey.frequency_interval != next_journey.frequency_interval:
+                    logger.info(
+                        "frequency: %s - every %s - %s",
+                        trip.start,
+                        journey.frequency_interval,
+                        journey.frequency_end_time,
+                    )
+                    # trip repeats every 10 minutes, for example:
+                    while trip.start < journey.frequency_end_time:
+                        trip = Trip(
+                            inbound=trip.inbound,
+                            calendar=trip.calendar,
+                            route=trip.route,
+                            journey_pattern=trip.journey_pattern,
+                            operator=trip.operator,
+                            start=trip.start + journey.frequency_interval,
                         )
-                        # trip repeats every 10 minutes, for example:
-                        while trip.start < journey.frequency_end_time:
-                            trip = Trip(
-                                inbound=trip.inbound,
-                                calendar=trip.calendar,
-                                route=trip.route,
-                                journey_pattern=trip.journey_pattern,
-                                operator=trip.operator,
-                                start=trip.start + journey.frequency_interval,
-                            )
-                            journey.departure_time = trip.start
-                            for cell in journey.get_times():
-                                stop_time = get_stop_time(trip, cell, stops)
-                                stop_times.append(stop_time)
-                            trip.end = stop_time.arrival_or_departure()
-                            trips.append(trip)
+                        journey.departure_time = trip.start
+                        for cell in journey.get_times():
+                            stop_time = get_stop_time(trip, cell, stops)
+                            stop_times.append(stop_time)
+                        trip.end = stop_time.arrival_or_departure()
+                        trips.append(trip)
 
         if not route_created:
             # reuse trip ids if the number and start times haven't changed
@@ -1129,14 +1119,13 @@ class Command(BaseCommand):
                 ).exists()
 
             return False
-        elif self.source.name == "L":  # TfL data is always best
-            return False
-        elif not operators:
+        elif self.source.name == "L" or not operators:  # TfL data is always best
             return False
 
-        if self.source.name != "TfGM":
-            if any(noc not in self.incomplete_operators for noc in nocs):
-                return False  # jointly-operated service?
+        if self.source.name != "TfGM" and any(
+            noc not in self.incomplete_operators for noc in nocs
+        ):
+            return False  # jointly-operated service?
 
         if "FHAL" in nocs:
             nocs.add("FHUD")
@@ -1186,12 +1175,15 @@ class Command(BaseCommand):
             return
 
         if self.source.is_tnds():
-            if self.source.name != "L":
-                if operators and all(
+            if (
+                self.source.name != "L"
+                and operators
+                and all(
                     operator.noc in self.open_data_operators
                     for operator in operators.values()
-                ):
-                    return
+                )
+            ):
+                return
         elif self.source.name.startswith("Arriva") and "tfl_" in filename:
             logger.info(
                 f"skipping {filename} {txc_service.service_code} (Arriva London)"
@@ -1420,12 +1412,10 @@ class Command(BaseCommand):
                     out_desc = titlecase(out_desc, callback=initialisms)
                     in_desc = titlecase(in_desc, callback=initialisms)
 
-                if out_desc:
-                    if not service.description or len(txc_service.lines) > 1:
-                        service.description = out_desc
-                if in_desc:
-                    if not service.description:
-                        service.description = in_desc
+                if out_desc and (not service.description or len(txc_service.lines) > 1):
+                    service.description = out_desc
+                if in_desc and not service.description:
+                    service.description = in_desc
 
             service.save()
 

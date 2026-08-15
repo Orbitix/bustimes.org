@@ -142,19 +142,18 @@ class Timetable:
             self.yesterday = self.date - datetime.timedelta(days=1)
             self.yesterday_routes = get_routes(routes, self.yesterday)
 
-        if not self.calendar:
-            if self.calendars:
-                calendar_ids = [calendar.id for calendar in self.calendars]
-                self.calendar_ids = list(
-                    get_calendars(
-                        self.date, calendar_ids, scotland=scotland
-                    ).values_list("id", flat=True)
+        if not self.calendar and self.calendars:
+            calendar_ids = [calendar.id for calendar in self.calendars]
+            self.calendar_ids = list(
+                get_calendars(self.date, calendar_ids, scotland=scotland).values_list(
+                    "id", flat=True
                 )
-                self.yesterday_calendar_ids = list(
-                    get_calendars(
-                        self.yesterday, calendar_ids, scotland=scotland
-                    ).values_list("id", flat=True)
-                )
+            )
+            self.yesterday_calendar_ids = list(
+                get_calendars(
+                    self.yesterday, calendar_ids, scotland=scotland
+                ).values_list("id", flat=True)
+            )
 
     def correct_directions(self, trips):
         # for merged multi-operator routes: reverse the polarity if they disagree which direction is inbound/outbound
@@ -383,9 +382,11 @@ class Timetable:
                 return  # exceptions or extra days, too complicated
 
         for calendar in self.calendars:
-            if calendar.id == calendar_id:
-                self.calendar = calendar
-            elif calendar_id is None and calendar.allows(self.today):
+            if (
+                calendar.id == calendar_id
+                or calendar_id is None
+                and calendar.allows(self.today)
+            ):
                 self.calendar = calendar
 
         calendar_options = list(self.calendars)
@@ -443,7 +444,7 @@ class Timetable:
 
     def credits(self):
         credits = (route.source.credit(route) for route in self.current_routes)
-        return set(credit for credit in credits if credit)
+        return {credit for credit in credits if credit}
 
 
 @dataclass
@@ -462,16 +463,16 @@ class Repetition:
                 return "then\u00a0hourly until"
             return "then hourly until"
         if self.duration.seconds % 3600 == 0:
-            duration = "{} hours".format(int(self.duration.seconds / 3600))
+            duration = f"{int(self.duration.seconds / 3600)} hours"
         else:
-            duration = "{} minutes".format(int(self.duration.seconds / 60))
+            duration = f"{int(self.duration.seconds / 60)} minutes"
         if self.min_height < 3:
             return "then\u00a0every {}\u00a0until".format(
                 duration.replace(" ", "\u00a0")
             )
         if self.min_height < 4:
             return "then every\u00a0{} until".format(duration.replace(" ", "\u00a0"))
-        return "then every {} until".format(duration)
+        return f"then every {duration} until"
 
 
 def abbreviate(grouping, i, in_a_row, difference):
@@ -511,12 +512,12 @@ def abbreviate(grouping, i, in_a_row, difference):
 def journey_patterns_match(trip_a, trip_b):
     if trip_a.route_id != trip_b.route_id or trip_a.operator_id != trip_b.operator_id:
         return False
-    if trip_a.journey_pattern:
-        if trip_a.journey_pattern == trip_b.journey_pattern:
-            if trip_a.destination_id == trip_b.destination_id:
-                if trip_a.end - trip_a.start == trip_b.end - trip_b.start:
-                    return True
-    return False
+    return bool(
+        trip_a.journey_pattern
+        and trip_a.journey_pattern == trip_b.journey_pattern
+        and trip_a.destination_id == trip_b.destination_id
+        and trip_a.end - trip_a.start == trip_b.end - trip_b.start
+    )
 
 
 class Grouping:
@@ -546,7 +547,7 @@ class Grouping:
                 partses = [reversed(parts) for parts in partses]
             return "\n".join([" - ".join(parts) for parts in partses])
 
-        if headsigns := set(trip.headsign for trip in self.trips if trip.headsign):
+        if headsigns := {trip.headsign for trip in self.trips if trip.headsign}:
             return f"To {' or '.join(headsigns)}"
 
         if self.inbound:
@@ -556,7 +557,7 @@ class Grouping:
     def txt(self):
         width = max(len(str(row.stop)) for row in self.rows)
         return "\n".join(
-            f"{str(row.stop):<{width}}  {'  '.join(str(time) or '     ' for time in row.times)}"
+            f"{row.stop!s:<{width}}  {'  '.join(str(time) or '     ' for time in row.times)}"
             for row in self.rows
         )
 
@@ -754,9 +755,7 @@ class Grouping:
                         b_time = row.times[b_index].departure_or_arrival()
                         if a_time > b_time:  # a after b
                             sorter.add(id(a), id(b))
-                        elif a_time < b_time:  # a before b
-                            sorter.add(id(b), id(a))
-                        elif b.top is a.bottom:
+                        elif a_time < b_time or b.top is a.bottom:  # a before b
                             sorter.add(id(b), id(a))
                         break
 

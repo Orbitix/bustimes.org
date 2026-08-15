@@ -1,39 +1,42 @@
 import datetime
-import json
 import logging
-from itertools import pairwise, groupby
-from urllib.parse import unquote
+import subprocess
 from functools import partial
 from http import HTTPStatus
-import subprocess
+from itertools import groupby, pairwise
+from urllib.parse import unquote
+
 import xmltodict
 from django.conf import settings
-from django.contrib.auth.models import Permission
 from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.models import Permission
 from django.contrib.gis.geos import GEOSException
 from django.core.cache import cache
-from django.core.exceptions import PermissionDenied, BadRequest
+from django.core.exceptions import BadRequest, PermissionDenied
 from django.core.paginator import Paginator
 from django.db import IntegrityError, OperationalError, connection, transaction
-from django.db.models import Case, F, Max, OuterRef, Q, When, Value
+from django.db.models import Case, F, Max, OuterRef, Q, Value, When
 from django.db.models.aggregates import StringAgg
 from django.db.models.functions import Coalesce, Now
-from django.http import Http404, HttpResponse, JsonResponse, HttpResponseBadRequest
-from django.shortcuts import get_object_or_404, render, redirect
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import (
     get_conditional_response,
-    set_response_etag,
     patch_cache_control,
+    set_response_etag,
 )
+from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_safe
-from django.utils.decorators import method_decorator
 from django.views.generic.detail import DetailView
+from django_orjson.http import JsonResponse
 from haversine import haversine
+from orjson import loads
 from redis.exceptions import ConnectionError
+from requests import HTTPError
 from sql_util.utils import Exists, SubqueryMax, SubqueryMin
 
 from accounts.models import User
@@ -47,7 +50,7 @@ from busstops.utils import get_bounding_box
 from bustimes.models import Garage, Route
 from bustimes.utils import get_other_trips_in_block
 from photos.forms import PhotoForm
-from photos.utils import add_flickr_photo
+from photos.utils import WrongLicense, add_flickr_photo, add_uploaded_photo
 
 from . import filters, forms
 from .management.commands import import_bod_avl
@@ -62,6 +65,8 @@ from .models import (
 from .rtpi import add_progress_and_delay
 from .tasks import handle_siri_post
 from .utils import apply_revision, get_revision, redis_client  # calculate_bearing,
+
+logger = logging.getLogger(__name__)
 
 
 def get_redirect_view(*args, **kwargs):
@@ -131,14 +136,16 @@ def vehicles(request):
 def liveries_css(request, version=0):
     styles = []
     liveries = Livery.objects.filter(published=True).order_by("left_css")
-    for _, liveries in groupby(liveries, lambda livery: livery.right_css):
-        liveries = list(liveries)
-        styles += liveries[0].get_styles([livery.id for livery in liveries])
+    for _, livery_group in groupby(liveries, lambda livery: livery.right_css):
+        livery_group = list(livery_group)
+        styles += livery_group[0].get_styles([livery.id for livery in livery_group])
     styles = "".join(styles)
     completed_process = subprocess.run(
-        ["lightningcss", "--minify"], input=styles.encode(), capture_output=True
+        ["lightningcss", "--minify"],
+        input=styles.encode(),
+        capture_output=True,
+        check=True,
     )
-    completed_process.check_returncode()
     styles = completed_process.stdout
     return HttpResponse(styles, content_type="text/css")
 
@@ -248,7 +255,7 @@ def operator_vehicles(request, slug=None, group_slug=None):
 
         context["features_column"] = any(vehicle.feature_names for vehicle in vehicles)
 
-    columns = set(key for vehicle in vehicles if vehicle.data for key in vehicle.data)
+    columns = {key for vehicle in vehicles if vehicle.data for key in vehicle.data}
     for vehicle in vehicles:
         vehicle.column_values = [
             vehicle.data and vehicle.data_get(key) or "" for key in columns
@@ -281,9 +288,7 @@ def operator_vehicles(request, slug=None, group_slug=None):
             for vehicle in vehicles
         )
 
-    garage_names = set(
-        vehicle.garage_name for vehicle in vehicles if vehicle.garage_name
-    )
+    garage_names = {vehicle.garage_name for vehicle in vehicles if vehicle.garage_name}
 
     context = {
         **context,
@@ -395,9 +400,7 @@ def get_vehicle_locations(
     vehicle_locations = redis_client.mget(
         [f"vehicle{vehicle_id}" for vehicle_id in vehicle_ids]
     )
-    vehicle_locations = [
-        json.loads(item) if item else item for item in vehicle_locations
-    ]
+    vehicle_locations = [loads(item) if item else item for item in vehicle_locations]
 
     # remove expired items from 'vehicle_location_locations'
     to_remove = [
@@ -428,7 +431,9 @@ def get_vehicle_locations(
             [
                 vehicle_id
                 for vehicle_id, item in zip(vehicle_ids, vehicle_locations)
-                if item and f"journey{item['journey_id']}" not in journeys
+                if item
+                and "vehicle" not in item
+                and f"journey{item['journey_id']}" not in journeys
             ]
         )
     except OperationalError:
@@ -441,7 +446,11 @@ def get_vehicle_locations(
         if item:
             journey_cache_key = f"journey{item['journey_id']}"
 
-            if journey_cache_key in journeys:
+            if "vehicle" in item:
+                # journey-based tracking with no Vehicle record (e.g. FlixBus) -
+                # the 'vehicle' is already in the item
+                pass
+            elif journey_cache_key in journeys:
                 item.update(journeys[journey_cache_key])
             elif vehicles:
                 try:
@@ -460,7 +469,7 @@ def get_vehicle_locations(
                     if vehicle.latest_journey_id == item["journey_id"]:
                         journeys_to_cache_later[journey_cache_key] = journey
                     else:
-                        logging.warning(
+                        logger.warning(
                             f"{vehicle=} {vehicle.latest_journey_id=} {item['journey_id']=}"
                         )
                     item.update(journey)
@@ -565,7 +574,7 @@ def vehicles_json(request) -> JsonResponse:
     except BadRequest:
         return cachable_400()
 
-    response = JsonResponse(locations, safe=False)
+    response = JsonResponse(locations)
 
     return respond_conditionally(request, response)
 
@@ -624,10 +633,9 @@ def journeys_list(request, journeys, service=None, vehicle=None) -> dict:
 
         journeys = journeys.filter(date=date).select_related("trip").order_by("id")
 
-        if dates:
-            if date not in dates:
-                dates.append(date)
-                dates.sort()
+        if dates and date not in dates:
+            dates.append(date)
+            dates.sort()
 
         context["journeys"] = journeys
 
@@ -738,6 +746,7 @@ class VehicleDetailView(DetailView):
     queryset = model.objects.select_related(
         "operator", "operator__region", "vehicle_type", "livery", "latest_journey"
     ).prefetch_related("features", "photo_set")
+    form = None
 
     def get_object(self, **kwargs):
         try:
@@ -772,11 +781,11 @@ class VehicleDetailView(DetailView):
             context["title"] = str(self.object)
 
         if "journeys" in context:
-            garages = set(
+            garages = {
                 journey.trip.garage_id
                 for journey in context["journeys"]
                 if journey.trip and journey.trip.garage_id
-            )
+            }
             if len(garages) == 1:
                 context["garage"] = Garage.objects.get(id=garages.pop())
 
@@ -795,30 +804,43 @@ class VehicleDetailView(DetailView):
             context["next"] = self.object.get_next()
 
         if self.request.user.has_perm("photos.add_photo"):
-            context["form"] = PhotoForm()
+            context["form"] = self.form or PhotoForm()
 
         return context
 
     def render_to_response(self, context):
         response = super().render_to_response(context)
 
-        if self.object.withdrawn and "potential_duplicates" in context:
-            if not all(
+        if (
+            self.object.withdrawn
+            and "potential_duplicates" in context
+            and not all(
                 vehicle.withdrawn for vehicle in context["potential_duplicates"]
-            ):
-                response.status_code = HTTPStatus.NOT_FOUND
+            )
+        ):
+            response.status_code = HTTPStatus.NOT_FOUND
 
         return response
 
     @method_decorator(permission_required("photos.add_photo", raise_exception=True))
     def post(self, *args, **kwargs):
-        form = PhotoForm(self.request.POST)
+        form = PhotoForm(self.request.POST, self.request.FILES)
         vehicle = self.get_object()
         if form.is_valid():
-            try:
-                add_flickr_photo(form.cleaned_data["url"], vehicle, self.request)
-            except IndexError:
-                pass
+            if image := form.cleaned_data["image"]:
+                add_uploaded_photo(image, vehicle, self.request)
+            else:
+                try:
+                    add_flickr_photo(form.cleaned_data["url"], vehicle, self.request)
+                except IndexError:
+                    form.add_error("url", "That doesn't look like a Flickr photo URL")
+                except WrongLicense:
+                    form.add_error("url", "That photo isn't permissively licensed")
+                except HTTPError:
+                    form.add_error("url", "Couldn't get the photo from Flickr")
+
+        if form.errors:
+            self.form = form
 
         return self.get(*args, **kwargs)
 
@@ -1021,9 +1043,10 @@ def vehicle_edits(request):
         .order_by("-id")
     )
 
-    f = filters.VehicleRevisionFilter(
-        request.GET or {"status": "approved"}, queryset=revisions
-    )
+    data = request.GET.copy()
+    data.setdefault("status", "approved")
+
+    f = filters.VehicleRevisionFilter(data, queryset=revisions)
     if request.user.is_anonymous or not (
         request.user.trusted
         or request.user.is_superuser
@@ -1061,7 +1084,11 @@ def latest_journey_debug(request, **kwargs):
     except (KeyError, TypeError):
         pass
 
-    return JsonResponse(vehicle.latest_journey_data, safe=False)
+    return JsonResponse(vehicle.latest_journey_data)
+
+
+class _Rollback(Exception):
+    """raised to roll back the atomic block in the debug view below"""
 
 
 def debug(request):
@@ -1070,9 +1097,9 @@ def debug(request):
     if form.is_valid():
         data = form.cleaned_data["data"]
         try:
-            item = json.loads(data)
-        except ValueError as e:
-            form.add_error("data", e)
+            item = loads(data)
+        except ValueError:
+            form.add_error("data", "that isn't valid JSON")
         else:
             vehicle = None
             journey = None
@@ -1081,12 +1108,12 @@ def debug(request):
                 with transaction.atomic():
                     command = import_bod_avl.Command()
                     command.do_source()
-                    vehicle, created = command.get_vehicle(item)
+                    vehicle, _created = command.get_vehicle(item)
                     journey = command.get_journey(item, vehicle)
                     if not journey.datetime:
                         journey.datetime = command.get_datetime(item)
-                    raise Exception
-            except Exception:
+                    raise _Rollback
+            except _Rollback:
                 pass
             connection.force_debug_cursor = False
 
@@ -1147,12 +1174,15 @@ def overland(request, uuid=None):
 
     subscription = get_object_or_404(SiriSubscription, uuid=uuid)
 
-    data = json.loads(request.body)
+    data = loads(request.body)
 
     for item in data["locations"][-1:]:
         when = item["properties"]["timestamp"]
         device_id = item["properties"]["device_id"]
-        operator, vehicle, line_name, journey_ref = device_id.split(":")
+        try:
+            operator, vehicle, line_name, journey_ref = device_id.split(":", 3)
+        except ValueError:
+            operator = vehicle = line_name = journey_ref = ""
         lon, lat = item["geometry"]["coordinates"]
         activity = {
             "RecordedAtTime": when,

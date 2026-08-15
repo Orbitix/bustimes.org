@@ -292,6 +292,7 @@ h1 .reg {
     padding: 8px 6px 2px;
     border-radius: 2px;
     font-size: 24px;
+    white-space: nowrap ;
 }
 
 h2 {
@@ -745,13 +746,6 @@ table {
 .has-smalls .names {
     float: left;
     margin-right: .75em;
-}
-
-#skew {
-    font-size: 10px;
-    position: absolute;
-    top: 0;
-    left: 50%;
 }
 
 #hugemap {
@@ -1317,22 +1311,17 @@ input:not(:checked) + label {
         margin-top: 0;
     }
 
-    table { // departures
-        margin: 0 -.5em;
-    }
-
     th {
         border: 0;
-        padding: 0;
-        padding-left: .5rem;
+        padding: 0 0 .25rem .5rem;
         font-size: .75em;
         vertical-align: bottom;
     }
 
     td {
         border: 0;
-        padding: .125em .5em;
         vertical-align: top;
+        border-top: 1px solid var(--border-color);
 
         &:nth-child(2) {
             width: 100%;
@@ -1344,8 +1333,8 @@ input:not(:checked) + label {
 
         a {
             display: block;
-            margin: -.125em -.5em;
-            padding: .125em .5em;
+            padding: .25em 0;
+            margin: -.25em 0;
         }
     }
 
@@ -1518,23 +1507,36 @@ nav {
     box-shadow: var(--border-color) 0 1px;
 }
 
-figure {
-    margin: 1em 0;
+.vehicle-photo {
+    float: right;
+    width: 170px;
     position: relative;
+    margin: 0;
+    min-height: 70px;
 
     img {
         display: block;
+        width: 170px;
+        height: auto;
+    }
+
+    figcaption {
+        color: #fff;
+        text-shadow: #000 0 0 2px;
+        font-size: 12px;
+        padding: 2px 4px;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+
+        a {
+            color: inherit;
+        }
     }
 }
 
-figcaption {
-    background: #000;
-    color: #fff;
-    font-size: .75em;
-    padding: .25em;
-    position: absolute;
-    bottom: 0;
-    left: 0;
+#journeys {
+    clear: right;
 }
 
 #stickyAdContainer {

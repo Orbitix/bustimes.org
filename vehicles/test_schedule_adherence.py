@@ -295,7 +295,7 @@ class ScheduleAdherenceTest(TestCase):
             self.assertEqual(response_json["times"][0]["delay"], "P0DT00H16M07S")
             self.assertEqual(
                 response_json["times"][0]["expected_departure_time"],
-                "2024-02-16T10:59:07Z",
+                "2024-02-16T10:59:07+00:00",
             )
 
             with self.assertNumQueries(11):
@@ -328,7 +328,7 @@ class ScheduleAdherenceTest(TestCase):
             self.assertEqual(response_json["times"][0]["delay"], "-P0DT00H33M53S")
             self.assertEqual(
                 response_json["times"][0]["expected_departure_time"],
-                "2024-02-16T10:09:07Z",
+                "2024-02-16T10:09:07+00:00",
             )
 
             # delay already calculated (eg TfW)
@@ -351,7 +351,7 @@ class ScheduleAdherenceTest(TestCase):
             self.assertEqual(response_json["times"][0]["delay"], "P0DT00H01M00S")
             self.assertEqual(
                 response_json["times"][0]["expected_departure_time"],
-                "2024-02-16T10:44:00Z",
+                "2024-02-16T10:44:00+00:00",
             )
 
             # a long way off-route - no prediction

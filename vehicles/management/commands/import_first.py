@@ -5,9 +5,10 @@ from uuid import uuid4
 
 import requests
 from asgiref.sync import sync_to_async
-from django.db.models import Q
 from django.contrib.gis.db.models import Extent
 from django.contrib.gis.geos import Point
+from django.db import connections
+from django.db.models import Q
 from django.utils import timezone
 from websockets.asyncio.client import connect
 
@@ -44,7 +45,7 @@ class Command(ImportLiveVehiclesCommand):
         # origin aimed departure time
         departure_time = item["stops"][0]["date"] + " " + item["stops"][0]["time"]
         departure_time = timezone.make_aware(
-            datetime.strptime(departure_time, "%Y-%m-%d %H:%M")
+            datetime.strptime(departure_time, "%Y-%m-%d %H:%M")  # noqa: DTZ007
         )
 
         if vehicle.latest_journey and vehicle.latest_journey.datetime == departure_time:
@@ -160,13 +161,20 @@ class Command(ImportLiveVehiclesCommand):
             self.handle_item(item, vehicles.get(vehicle_codes[i]))
         self.save()
 
+    @sync_to_async
+    def close_connections(self):
+        connections.close_all()
+
     @staticmethod
     def get_extent(operator):
         services = Service.objects.filter(operator=operator, current=True)
         return services.aggregate(Extent("geometry"))["geometry__extent"]
 
     async def sock_it(self, extent, noc, route_name):
-        socket_info = requests.get(self.source.url, headers=self.source.settings).json()
+        response = await asyncio.to_thread(
+            requests.get, self.source.url, headers=self.source.settings
+        )
+        socket_info = response.json()
 
         min_lon, min_lat, max_lon, max_lat = extent
 
@@ -221,4 +229,7 @@ class Command(ImportLiveVehiclesCommand):
         operator = Operator.objects.get(Q(name=operator_name) | Q(noc=operator_name))
 
         extent = self.get_extent(operator)
-        asyncio.run(self.sock_it(extent, operator_name, route_name))
+        try:
+            asyncio.run(self.sock_it(extent, operator_name, route_name))
+        finally:
+            asyncio.run(self.close_connections())

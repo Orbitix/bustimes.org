@@ -1,10 +1,11 @@
+import logging
 import xml.etree.ElementTree as ET
+from datetime import datetime
 
 import requests
 import yaml
-import logging
-from datetime import datetime
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.management import BaseCommand
 from django.db import transaction
 from django.utils.text import slugify
@@ -12,6 +13,8 @@ from django.utils.text import slugify
 from vosa.models import Licence
 
 from ...models import DataSource, Operator, OperatorCode
+
+logger = logging.getLogger(__name__)
 
 
 def get_region_id(region_id):
@@ -174,14 +177,12 @@ class Command(BaseCommand):
 
                 if "url" in override_data:
                     if url == override_data["url"]:
-                        logging.warning(
-                            "%s url %s no longer needs overriding", noc, url
-                        )
+                        logger.warning("%s url %s no longer needs overriding", noc, url)
                     url = override_data["url"]
 
                 if "name" in override_data:
                     if name == override_data["name"]:
-                        logging.warning(
+                        logger.warning(
                             "%s name %s no longer needs overriding", noc, name
                         )
                     name = override_data["name"]
@@ -238,7 +239,7 @@ class Command(BaseCommand):
 
             try:
                 operator.clean_fields(exclude=["noc", "slug", "region"])
-            except Exception as e:
+            except ValidationError as e:
                 if "url" in e.message_dict:
                     # print(e, operator.url)
                     operator.url = ""

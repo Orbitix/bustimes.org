@@ -66,11 +66,9 @@ class Registration(models.Model):
     )
 
     def __str__(self):
-        string = "{} - {} to {}".format(
-            self.service_number, self.start_point, self.finish_point
-        )
+        string = f"{self.service_number} - {self.start_point} to {self.finish_point}"
         if self.via:
-            string = "{} via {}".format(string, self.via)
+            string = f"{string} via {self.via}"
         return string
 
     def get_absolute_url(self):

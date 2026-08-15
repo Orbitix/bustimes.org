@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from django.test import TestCase
 from django.core.management import call_command
+from django.test import TestCase
 from vcr import use_cassette
 
 from ...models import (

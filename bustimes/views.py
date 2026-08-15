@@ -4,19 +4,19 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import requests
 import folium
+import requests
 from django.conf import settings
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db.models import (
     Count,
-    Prefetch,
-    prefetch_related_objects,
     F,
-    Q,
     FilteredRelation,
+    Prefetch,
+    Q,
+    prefetch_related_objects,
 )
 from django.db.models.functions import Coalesce
 from django.http import (
@@ -24,7 +24,6 @@ from django.http import (
     Http404,
     HttpResponse,
     HttpResponseBadRequest,
-    JsonResponse,
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -32,6 +31,7 @@ from django.utils.safestring import mark_safe
 from django.views.decorators.http import require_GET
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
+from django_orjson.http import JsonResponse
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import JsonLexer, XmlLexer
@@ -47,13 +47,13 @@ from busstops.models import (
     StopPoint,
 )
 from departures import avl, gtfsr, live
-from vehicles.forms import DateForm
+from vehicles.forms import DateForm, TripUpdatesFeedForm
 from vehicles.models import Vehicle, VehicleJourney
 from vehicles.rtpi import add_progress_and_delay
 
 from .download_utils import download
-from .models import Route, StopTime, Trip, RouteLink
-from .utils import get_other_trips_in_block, get_calendars
+from .models import Route, RouteLink, StopTime, Trip
+from .utils import get_calendars, get_other_trips_in_block
 
 
 class ServiceDebugView(DetailView):
@@ -463,12 +463,12 @@ def stop_debug(request, atco_code: str):
     formatter = HtmlFormatter()
     css = formatter.get_style_defs()
 
-    for key, response in cache.get_many(
+    for response in cache.get_many(
         [
             f"TflDepartures:{stop.pk}",
             f"SiriSmDepartures:{stop.pk}",
         ]
-    ).items():
+    ).values():
         response_text = response.text
         # syntax-highlight and pretty-print XML and JSON responses
         try:
@@ -693,7 +693,7 @@ def tfl_vehicle(request, reg: str):
             atco_code = item["naptanId"]
 
             if stop := (stops.get(atco_code) or stops.get(f"0{atco_code}")):
-                item["sequence"] = (getattr(stop, "sequence") or 0) + prev_trip_sequence
+                item["sequence"] = (stop.sequence or 0) + prev_trip_sequence
             else:
                 item["sequence"] = prev_sequence
 
@@ -718,7 +718,9 @@ def tfl_vehicle(request, reg: str):
             datetime.fromisoformat(item["expectedArrival"])
         )
         expected_arrival = round(expected_arrival.timestamp() / 60) * 60
-        expected_arrival = datetime.fromtimestamp(expected_arrival)
+        expected_arrival = datetime.fromtimestamp(
+            expected_arrival, tz=timezone.get_current_timezone()
+        )
         time = {
             "id": i,
             "stop": {
@@ -785,41 +787,51 @@ trip_updates_sources = {
 
 @require_GET
 def trip_updates_json(request, feed_name: str):
-    if feed_name in trip_updates_sources:
-        if feed := cache.get(f"{feed_name}_trip_updates"):
-            return JsonResponse(feed)
+    if feed_name in trip_updates_sources and (
+        feed := cache.get(f"{feed_name}_trip_updates")
+    ):
+        return JsonResponse(feed)
 
     raise Http404
 
 
 @require_GET
 def trip_updates(request):
-    feed_name = request.GET.get("feed_name", "ntaie")
+    default_feed_name = "ntaie"
 
-    if feed_name not in trip_updates_sources:
-        raise Http404
+    get = request.GET.copy()
+    get.setdefault("feed_name", default_feed_name)
+
+    form = TripUpdatesFeedForm(get, trip_updates_sources)
+
+    feed_name = default_feed_name
+    if form.is_valid() and (chosen_feed_name := form.cleaned_data["feed_name"]):
+        feed_name = chosen_feed_name
 
     source = DataSource.objects.get(name=trip_updates_sources[feed_name]["source_name"])
 
-    trip_updates = gtfsr.get_trip_updates(feed_name)
+    if trip_updates := gtfsr.get_trip_updates(feed_name):
+        journey_codes = trip_updates.keys()
+        trips = Trip.objects.filter(
+            route__source=source, ticket_machine_code__in=journey_codes
+        )
+        operators = Operator.objects.filter(
+            service__route__in={trip.route_id for trip in trips}
+        ).distinct()
+        trips = {trip.ticket_machine_code: trip for trip in trips}
 
-    journey_codes = trip_updates.keys()
-    trips = Trip.objects.filter(
-        route__source=source, ticket_machine_code__in=journey_codes
-    )
-    operators = Operator.objects.filter(
-        service__route__in=set(trip.route_id for trip in trips)
-    ).distinct()
-    trips = {trip.ticket_machine_code: trip for trip in trips}
-
-    trip_updates = [
-        (entity, trips.get(trip_id)) for trip_id, entity in trip_updates.items()
-    ]
+        trip_updates = [
+            (entity, trips.get(trip_id)) for trip_id, entity in trip_updates.items()
+        ]
+    else:
+        trips = ()
+        operators = None
 
     return render(
         request,
         "trip_updates.html",
         {
+            "form": form,
             "trips": len(trips),
             "operators": operators,
             "trip_updates": trip_updates,

@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from django.contrib.gis.geos import GEOSGeometry
 from django.db.models import Exists, OuterRef, Q
 from django.utils.timezone import localdate
@@ -48,7 +49,7 @@ from ..import_live_vehicles import ImportLiveVehiclesCommand
 
 def parse_timestamp(timestamp):
     if timestamp:
-        return datetime.fromtimestamp(int(timestamp) / 1000, timezone.utc)
+        return datetime.fromtimestamp(int(timestamp) / 1000, UTC)
 
 
 def has_stop(stop):

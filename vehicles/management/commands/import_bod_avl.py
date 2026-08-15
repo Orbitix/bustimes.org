@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 import requests
 import sentry_sdk
-from lxml import etree
 from django.conf import settings
 from django.contrib.gis.geos import GEOSGeometry
 from django.core.cache import cache
@@ -14,6 +13,7 @@ from django.db import IntegrityError
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_duration
+from lxml import etree
 
 from busstops.models import (
     Operator,
@@ -26,7 +26,6 @@ from bustimes.models import Route, Trip
 
 from ...models import Vehicle, VehicleJourney, VehicleLocation
 from ..import_live_vehicles import ImportLiveVehiclesCommand, Status
-
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +127,7 @@ class Command(ImportLiveVehiclesCommand):
     def get_datetime(item):
         return datetime.fromisoformat(item["RecordedAtTime"])
 
-    @functools.cache
+    @functools.cache  # noqa: B019 - one Command instance per process run
     def get_operator(self, operator_ref):
         # all operators with a matching OperatorCode,
         # or (if no such OperatorCode) the one with a matching id
@@ -214,12 +213,15 @@ class Command(ImportLiveVehiclesCommand):
                 defaults["fleet_number"] = fleet_number
                 reg = reg.replace("_", "")
                 defaults["reg"] = reg
-        if "fleet_number" not in defaults and vehicle_unique_id:
-            # VehicleUniqueId
-            if len(vehicle_unique_id) < len(vehicle_ref):
-                defaults["fleet_code"] = vehicle_unique_id
-                if vehicle_unique_id.isdigit():
-                    defaults["fleet_number"] = vehicle_unique_id
+        # VehicleUniqueId
+        if (
+            "fleet_number" not in defaults
+            and vehicle_unique_id
+            and len(vehicle_unique_id) < len(vehicle_ref)
+        ):
+            defaults["fleet_code"] = vehicle_unique_id
+            if vehicle_unique_id.isdigit():
+                defaults["fleet_number"] = vehicle_unique_id
 
         vehicles = vehicles.filter(condition)
 
@@ -615,6 +617,7 @@ class Command(ImportLiveVehiclesCommand):
 
     def get_items(self):
         response = self.session.get(self.source.url, timeout=61)
+        fetched_at = timezone.now()
 
         if not response.ok:
             print(response.headers, response.content, response)
@@ -643,9 +646,26 @@ class Command(ImportLiveVehiclesCommand):
 
         previous_time = self.source.datetime
 
-        self.source.datetime = datetime.fromisoformat(
-            service_delivery.findtext(f"{{{ns}}}ResponseTimestamp")
+        response_timestamp = service_delivery.findtext(f"{{{ns}}}ResponseTimestamp")
+        self.source.datetime = (
+            datetime.fromisoformat(response_timestamp) if response_timestamp else None
         )
+
+        items = None
+        if not self.source.datetime or self.source.datetime > fetched_at:
+            # ResponseTimestamp is missing, or implausibly fresh (e.g. a clock
+            # issue upstream) - fall back to the latest RecordedAtTime among
+            # the vehicle activities, since that's what actually drives the
+            # freshness/polling logic in update() below
+            items = [
+                _elem_to_dict(a)
+                for a in service_delivery.find(
+                    f"{{{ns}}}VehicleMonitoringDelivery"
+                ).findall(f"{{{ns}}}VehicleActivity")
+            ]
+            recorded_times = [self.get_datetime(item) for item in items]
+            if recorded_times:
+                self.source.datetime = max(recorded_times)
 
         if (
             self.source.datetime
@@ -654,8 +674,13 @@ class Command(ImportLiveVehiclesCommand):
         ):
             return  # don't return old data
 
-        delivery = service_delivery.find(f"{{{ns}}}VehicleMonitoringDelivery")
-        return [_elem_to_dict(a) for a in delivery.findall(f"{{{ns}}}VehicleActivity")]
+        if items is None:
+            delivery = service_delivery.find(f"{{{ns}}}VehicleMonitoringDelivery")
+            items = [
+                _elem_to_dict(a) for a in delivery.findall(f"{{{ns}}}VehicleActivity")
+            ]
+
+        return items
 
     @staticmethod
     def get_vehicle_identity(item):
@@ -706,8 +731,8 @@ class Command(ImportLiveVehiclesCommand):
                         changed_journey_identities,
                         total_items,
                     ) = self.get_changed_items()
-                except requests.exceptions.RequestException as e:
-                    logger.exception(e)
+                except requests.exceptions.RequestException:
+                    logger.exception("error getting changed items")
                     self.session.close()
                     self.session = requests.Session()
                     return 30

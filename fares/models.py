@@ -167,9 +167,8 @@ class FareTable(models.Model):
         cols = [col.name for col in self.column_set.all()]
         rows = [row.name for row in self.row_set.all()]
         rows.reverse()
-        if len(cols) == len(rows):
-            if cols[1:] == rows[:-1]:
-                return True
+        if len(cols) == len(rows) and cols[1:] == rows[:-1]:
+            return True
 
     def columns(self):
         return self.column_set.all()
@@ -182,9 +181,7 @@ class FareTable(models.Model):
             for cell in row.cell_set.all():
                 cell.column = cols[cell.column_id]
         if self.is_triangular:
-            i = 0
-            for row in rows:
-                i += 1
+            for i, row in enumerate(rows, start=1):
                 row.colspan = i
             rows.reverse()
 

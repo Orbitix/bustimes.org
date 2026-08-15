@@ -86,10 +86,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options["filename"]:
-            source, created = DataSource.objects.get_or_create(name=options["filename"])
+            source, _created = DataSource.objects.get_or_create(
+                name=options["filename"]
+            )
             path = options["filename"]
         else:
-            source, created = DataSource.objects.get_or_create(name="NPTG")
+            source, _created = DataSource.objects.get_or_create(name="NPTG")
 
             path = settings.DATA_DIR / "nptg.xml"
 

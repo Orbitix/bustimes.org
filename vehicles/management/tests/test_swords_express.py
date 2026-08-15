@@ -2,13 +2,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 import fakeredis
-import vcr
 import time_machine
-from django.test import TestCase
+import vcr
 from django.core.management import call_command
+from django.test import TestCase
 
 from busstops.models import Operator
+
 from ...models import Vehicle
+
+
+class StopLoop(Exception):
+    """raised to break out of the command's polling loop in tests"""
 
 
 class SignalRTest(TestCase):
@@ -29,15 +34,15 @@ class SignalRTest(TestCase):
             time_machine.travel("2026-06-28", tick=False),
             patch(
                 "vehicles.management.import_live_vehicles.sleep",
-                side_effect=[None, None, Exception],
+                side_effect=[None, None, StopLoop],
             ),
         ):
             with (
                 self.assertNumQueries(237),
-                self.assertRaises(Exception),
+                self.assertRaises(StopLoop),
             ):
                 call_command("swords_express")
 
-            vehicles = Vehicle.objects.all()
+            vehicles = Vehicle.objects.order_by("id")
 
             self.assertEqual(vehicles[0].reg, "05-D-7790")

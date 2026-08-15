@@ -1,7 +1,8 @@
 import math
 
-from django.core.cache import caches
+import redis.asyncio
 from django.conf import settings
+from django.core.cache import caches
 from django.core.cache.backends.base import InvalidCacheBackendError
 
 from .models import VehicleRevision, VehicleRevisionFeature
@@ -10,6 +11,21 @@ try:
     redis_client = caches["redis"]._cache.get_client()
 except InvalidCacheBackendError:
     redis_client = None
+
+if redis_client:
+    async_redis_client = redis.asyncio.Redis.from_url(
+        settings.REDIS_URL, max_connections=8
+    )
+else:
+    async_redis_client = None
+
+# channel that import_live_vehicles sends batches of updated vehicle locations to,
+# for the distribute_vehicle_locations worker to fan out to websocket groups
+VEHICLE_POSITIONS_CHANNEL = "vehicle_positions"
+
+# Redis sorted set of vehicle_id -> number of websocket clients currently watching it,
+# updated by VehicleLocationConsumer.connect/disconnect
+VEHICLE_WATCHERS_KEY = "vehicle_watchers"
 
 
 def filename_from_content_disposition(response) -> str:
@@ -46,7 +62,7 @@ def calculate_bearing(a, b):
     if bearing_degrees < 0:
         bearing_degrees += 360
 
-    return int(round(bearing_degrees))
+    return round(bearing_degrees)
 
 
 def get_revision(vehicle, data):

@@ -21,11 +21,14 @@ def _get_feed():
         url = "https://api.nationaltransport.ie/gtfsr/v2/TripUpdates"
         try:
             response = requests.get(
-                url, headers={"x-api-key": settings.NTA_API_KEY}, timeout=10
+                url,
+                headers={"x-api-key": settings.NTA_API_KEY},
+                timeout=10,
+                verify=False,
             )
             response.raise_for_status()
-        except requests.RequestException as e:
-            logger.exception(e)
+        except requests.RequestException:
+            logger.exception("error fetching NTA GTFS-R feed")
             return
         feed = gtfs_realtime_pb2.FeedMessage()
         feed.ParseFromString(response.content)
@@ -49,10 +52,12 @@ def get_trip_updates(feed_name) -> dict:
 
 
 def get_trip_update(trip, feed_name: str) -> dict:
-    if trip_id := trip.ticket_machine_code:
-        if trip_updates := get_trip_updates(feed_name):
-            if trip_id in trip_updates:
-                return trip_updates[trip_id]
+    if (
+        (trip_id := trip.ticket_machine_code)
+        and (trip_updates := get_trip_updates(feed_name))
+        and trip_id in trip_updates
+    ):
+        return trip_updates[trip_id]
 
 
 def get_expected_time(scheduled_time, stop_time_update, key):
@@ -122,13 +127,21 @@ def update_departure(departure: dict, trip_update: dict) -> None:
                 and "time" in stop_time_update["departure"]
             ):
                 time = datetime.fromtimestamp(
-                    int(stop_time_update["departure"]["time"])
+                    int(stop_time_update["departure"]["time"]),
+                    tz=ZoneInfo("Europe/Dublin"),
                 )
                 departure["live"] = time
 
             elif "delay" in stop_time_update["departure"]:
                 delay = timedelta(seconds=stop_time_update["departure"]["delay"])
                 departure["live"] = departure["time"] + delay
+
+    if (
+        "vehicle" not in departure
+        and "vehicle" in trip_update
+        and "licensePlate" in trip_update["vehicle"]
+    ):
+        departure["vehicle"] = trip_update["vehicle"]["licensePlate"]
 
 
 def update_stop_departures(departures: list, feed_name: str) -> None:

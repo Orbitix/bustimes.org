@@ -1,7 +1,7 @@
 from unittest import mock
 
-from django.test import TestCase, override_settings
 from django.core.management import call_command
+from django.test import TestCase, override_settings
 
 
 class ListenTest(TestCase):

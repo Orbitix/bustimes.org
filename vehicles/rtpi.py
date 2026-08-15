@@ -3,15 +3,19 @@
 import datetime
 import logging
 from itertools import pairwise
-from django.contrib.gis.geos import LineString, Point
+
+import sentry_sdk
 from django.contrib.gis.db.models.functions import Distance, LineLocatePoint
+from django.contrib.gis.gdal import CoordTransform, SpatialReference
+from django.contrib.gis.geos import LineString, Point
 
 from bustimes.models import RouteLink, StopTime, Trip
 from bustimes.utils import contiguous_stoptimes_only
 from vehicles.utils import calculate_bearing
 
-
 logger = logging.getLogger(__name__)
+
+WGS84_TO_WEB_MERCATOR = CoordTransform(SpatialReference(4326), SpatialReference(3857))
 
 
 def get_route_bearing(geometry: LineString, progress: float):
@@ -96,7 +100,7 @@ def get_progress(
     date = datetime.date.fromisoformat(item["date"])
 
     point = Point(*item["coordinates"], srid=4326)
-    point_3857 = point.transform(3857, clone=True)
+    point_3857 = point.transform(WGS84_TO_WEB_MERCATOR, clone=True)
 
     if stop_times is not None:
         stop_times = [st for st in stop_times if st.stop_id and st.stop.latlong]
@@ -131,75 +135,78 @@ def get_progress(
             rl.distance = rl.distance.m  # convert to meters
             route_links[(rl.from_stop_id, rl.to_stop_id)] = rl
 
-    nearby_pairs = []
-    for a, b in pairwise(stop_times):
-        key = (a.stop_id, b.stop_id)
-        if key in route_links:
-            rl = route_links[key]
-            if rl.distance < 1000:  # within ~1km
-                nearby_pairs.append((a, b, rl))
-        else:
-            geometry = LineString([a.stop.latlong, b.stop.latlong], srid=4326)
-            geometry_3857 = geometry.transform(3857, clone=True)
-            distance = geometry_3857.distance(point_3857)  # in meters
-            if distance < 1000:  # within ~1km
-                rl = RouteLink(from_stop=a.stop, to_stop=b.stop, geometry=geometry)
-                rl.distance = distance
-                rl.progress = geometry.project_normalized(point)
-                nearby_pairs.append((a, b, rl))
+    with sentry_sdk.start_span(name="nearby pairs"):
+        nearby_pairs = []
+        for a, b in pairwise(stop_times):
+            key = (a.stop_id, b.stop_id)
+            if key in route_links:
+                rl = route_links[key]
+                if rl.distance < 1000:  # within ~1km
+                    nearby_pairs.append((a, b, rl))
+            else:
+                geometry = LineString([a.stop.latlong, b.stop.latlong], srid=4326)
+                geometry_3857 = geometry.transform(WGS84_TO_WEB_MERCATOR, clone=True)
+                distance = geometry_3857.distance(point_3857)  # in meters
+                if distance < 1000:  # within ~1km
+                    rl = RouteLink(from_stop=a.stop, to_stop=b.stop, geometry=geometry)
+                    rl.distance = distance
+                    rl.progress = geometry.project_normalized(point)
+                    nearby_pairs.append((a, b, rl))
 
-    if not nearby_pairs:
-        return
+        if not nearby_pairs:
+            return
 
-    nearby_pairs.sort(key=lambda p: p[2].distance)
+        nearby_pairs.sort(key=lambda p: p[2].distance)
 
-    closest = nearby_pairs[0]
-    next_closest = nearby_pairs[1] if len(nearby_pairs) > 1 else None
+    with sentry_sdk.start_span(name="closest pairs"):
+        closest = nearby_pairs[0]
+        next_closest = nearby_pairs[1] if len(nearby_pairs) > 1 else None
 
-    if next_closest and item["heading"] is not None:
-        vehicle_heading = int(item["heading"])
+        if next_closest and item["heading"] is not None:
+            vehicle_heading = int(item["heading"])
 
-        route_bearing = get_route_bearing(closest[2].geometry, closest[2].progress)
-
-        difference = (vehicle_heading - route_bearing + 180) % 360 - 180
-
-        if not (abs(difference) < 90) and next_closest[2].distance < 100:
-            # bus seems to be heading the wrong way - does the bus go both ways on this road?
-            # try the next closest pair of stops:
-            route_bearing = get_route_bearing(
-                next_closest[2].geometry, next_closest[2].progress
-            )
+            route_bearing = get_route_bearing(closest[2].geometry, closest[2].progress)
 
             difference = (vehicle_heading - route_bearing + 180) % 360 - 180
-            if abs(difference) < 90:
-                closest = next_closest
-                distance = next_closest[2].distance
 
-    progress = Progress(
-        stop_times, closest[0], closest[1], closest[2].progress, closest[2].distance
-    )
-    progress.delay = get_delay(progress, date, when, tzinfo)
+            if not (abs(difference) < 90) and next_closest[2].distance < 100:
+                # bus seems to be heading the wrong way - does the bus go both ways on this road?
+                # try the next closest pair of stops:
+                route_bearing = get_route_bearing(
+                    next_closest[2].geometry, next_closest[2].progress
+                )
 
-    # if closest and next_closest involve the same stop
-    # (e.g. it's a circular route),
-    # choose the one with the smaller delay
-    if next_closest and (
-        closest[0].stop_id == next_closest[1].stop_id
-        or closest[1].stop_id == next_closest[0].stop_id
-    ):
-        alt = Progress(
-            stop_times,
-            next_closest[0],
-            next_closest[1],
-            next_closest[2].progress,
-            next_closest[2].distance,
+                difference = (vehicle_heading - route_bearing + 180) % 360 - 180
+                if abs(difference) < 90:
+                    closest = next_closest
+                    distance = next_closest[2].distance
+
+    with sentry_sdk.start_span(name="delay"):
+        progress = Progress(
+            stop_times, closest[0], closest[1], closest[2].progress, closest[2].distance
         )
-        alt.delay = get_delay(alt, date, when, tzinfo)
-        if abs(alt.delay) < abs(progress.delay):
-            progress = alt
+        progress.delay = get_delay(progress, date, when, tzinfo)
 
-    if abs(progress.delay) > 43200:  # more than 12 hours
-        logger.warning("%s delay is %s", item, progress.delay)
+        # if closest and next_closest involve the same stop
+        # (e.g. it's a circular route),
+        # choose the one with the smaller delay
+        if next_closest and (
+            closest[0].stop_id == next_closest[1].stop_id
+            or closest[1].stop_id == next_closest[0].stop_id
+        ):
+            alt = Progress(
+                stop_times,
+                next_closest[0],
+                next_closest[1],
+                next_closest[2].progress,
+                next_closest[2].distance,
+            )
+            alt.delay = get_delay(alt, date, when, tzinfo)
+            if abs(alt.delay) < abs(progress.delay):
+                progress = alt
+
+        if abs(progress.delay) > 43200:  # more than 12 hours
+            logger.warning("%s delay is %s", item, progress.delay)
 
     return progress
 

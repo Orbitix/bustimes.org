@@ -3,7 +3,6 @@ from http import HTTPStatus
 
 from django.http import HttpResponse
 from django.utils.cache import add_never_cache_headers
-
 from whitenoise.middleware import WhiteNoiseMiddleware
 
 
@@ -14,11 +13,9 @@ class HealthCheckMiddleware:
     def __call__(self, request):
         if request.path == "/up":
             # bypass ALLOWED_HOSTS check
-            response = HttpResponse("up!")
-        else:
-            response = self.get_response(request)
+            return HttpResponse("up!")
 
-        return response
+        return self.get_response(request)
 
 
 class WhiteNoiseWithFallbackMiddleware(WhiteNoiseMiddleware):

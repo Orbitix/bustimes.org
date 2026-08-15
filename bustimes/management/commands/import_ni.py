@@ -1,5 +1,5 @@
 import pprint
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import requests
@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
             for resource in data["result"]["resources"]:
                 dt = resource["last_modified"] or resource["created"]
-                dt = datetime.fromisoformat(dt).replace(tzinfo=timezone.utc)
+                dt = datetime.fromisoformat(dt).replace(tzinfo=UTC)
 
                 if source.datetime is None or dt > source.datetime:
                     # new data, lorks a lordy!

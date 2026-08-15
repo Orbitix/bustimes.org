@@ -1,27 +1,27 @@
 import functools
 import json
-from datetime import datetime, timedelta
 import zipfile
+from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Count, Q
 from django.utils import timezone
-from django.conf import settings
 from huey import crontab
 from huey.contrib.djhuey import db_periodic_task, db_task
 
 from busstops.models import DataSource, Operator
 
-from .utils import archive_avl_data
 from .management.commands import import_bod_avl
 from .models import (
     SiriSubscription,
     Vehicle,
+    VehicleCode,
     VehicleJourney,
     VehicleRevision,
-    VehicleCode,
 )
+from .utils import archive_avl_data
 
 
 @functools.cache
@@ -187,8 +187,14 @@ def log_vehicle_journey(service, data, time, destination, source_name, url, trip
 
     date = timezone.localdate(time)
     journeys = vehicle.vehiclejourney_set.filter(date=date)
+
+    existing = VehicleJourney.objects.filter(
+        Q(vehicle=vehicle) | Q(vehicle=None, service=service), date=date, datetime=time
+    ).first()
+
     if (
-        journeys.filter(datetime=time).exists()
+        existing
+        and existing.vehicle_id
         or journey_ref
         and journeys.filter(route_name=route_name, code=journey_ref).exists()
     ):
@@ -204,6 +210,11 @@ def log_vehicle_journey(service, data, time, destination, source_name, url, trip
         destination=destination,
         trip_id=trip_id,
     )
+
+    if existing:  # FlixBus journey with no vehicle id yet
+        journey.id = existing.id
+        journey.uuid = existing.uuid
+
     if not trip_id:
         journey.trip = journey.get_trip(
             departure_time=time, destination_ref=data.get("DestinationRef")

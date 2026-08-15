@@ -407,7 +407,7 @@ function TripSidebar(props: {
 }
 
 function JourneySidebar(props: {
-  journey: VehicleJourney;
+  journey?: VehicleJourney;
   journeyId: string;
   highlightedStop?: string;
   vehicle?: VehicleLocation | null;
@@ -416,6 +416,14 @@ function JourneySidebar(props: {
   let className = "trip-timetable map-sidebar";
 
   const journey = props.journey;
+
+  if (!journey) {
+    return (
+      <div className={className}>
+        <LoadingSorry />
+      </div>
+    );
+  }
 
   const showNavigation = journey.previous || journey.next;
 
@@ -501,7 +509,7 @@ function JourneySidebar(props: {
       ) : null}
       {journey.trip?.times ? (
         <TripTimetable
-          trip={{ times: journey.trip.times }}
+          trip={journey.trip}
           vehicle={props.vehicle}
           highlightedStop={props.highlightedStop}
           onMouseEnter={props.onMouseEnter}
@@ -722,11 +730,15 @@ export default function BigMap(
           }
           break;
         case MapMode.Journey:
-          if (journey?.live && journey.vehicle?.id) {
+          if (journey?.live) {
             if (journey.service?.id && journey.trip_id) {
               url = `?service=${journey.service.id}&trip=${journey.trip_id}`;
-            } else {
+            } else if (journey.vehicle?.id) {
               url = `?id=${journey.vehicle.id}`;
+            } else {
+              // journey-based tracking with no vehicle (e.g. FlixBus) -
+              // the journey id is used in lieu of a vehicle id
+              url = `?id=${journey.id}`;
             }
           }
           break;
@@ -751,11 +763,14 @@ export default function BigMap(
         }
 
         if (items.length || vehiclesLength.current || first) {
-          if (trip || journey?.vehicle?.id) {
+          if (trip || journey) {
             for (const item of items) {
               if (
                 (trip && trip.id === item.trip_id) ||
-                journey?.vehicle?.id === item.id
+                (journey &&
+                  (journey.vehicle?.id
+                    ? journey.vehicle.id === item.id
+                    : journey.id === item.journey_id))
               ) {
                 if (first) setClickedVehicleMarker(item.id);
                 setTripVehicle(item);
@@ -815,7 +830,7 @@ export default function BigMap(
         document.title = `${trip.service?.line_name} \u2013 ${trip.operator?.name} \u2013 bustimes.org`;
       } else {
         setJourney(undefined);
-        fetchJson(`api/trips/${props.tripId}/`).then(setTrip);
+        fetchJson(`api/trips/${props.tripId}.json`).then(setTrip);
       }
     } else if (props.noc) {
       setJourney(undefined);
@@ -833,15 +848,15 @@ export default function BigMap(
         }
       } else {
         setTrip(undefined);
-        fetchJson(`api/vehiclejourneys/${props.journeyId}/details/`).then(
+        fetchJson(`api/vehiclejourneys/${props.journeyId}/details.json`).then(
           (journey: VehicleJourney) => {
             setJourney(journey);
             const item = journey.vehicle?.id
               ? (journey.live?.find((v) => v.id === journey.vehicle?.id) ??
                 null)
-              : journey.live?.length
-                ? journey.live[0]
-                : null;
+              : // journey-based tracking with no vehicle (e.g. FlixBus)
+                (journey.live?.find((v) => v.journey_id === journey.id) ??
+                null);
             // sort of duplicating `handleItems`
             vehiclesHighWaterMark.current = null;
             setVehicles(journey.live);
@@ -1106,6 +1121,10 @@ export default function BigMap(
 
           {/* props.mode === MapMode.Slippy ? <SlippyMapHash /> : null */}
 
+          {props.mode === MapMode.Journey && journey?.trip?.times ? (
+            <Route times={journey.trip.times} />
+          ) : null}
+
           {props.mode === MapMode.Slippy ? (
             <Stops
               clickedStopFeature={clickedStopFeature}
@@ -1130,10 +1149,6 @@ export default function BigMap(
 
           {props.mode === MapMode.Journey && journeyLocations.length ? (
             <Locations locations={journeyLocations} />
-          ) : null}
-
-          {props.mode === MapMode.Journey && journey?.trip?.times ? (
-            <Route times={journey.trip.times} />
           ) : null}
 
           {vehicles && showBuses ? (
@@ -1183,7 +1198,7 @@ export default function BigMap(
         />
       ) : null}
 
-      {props.mode === MapMode.Journey && journey ? (
+      {props.mode === MapMode.Journey ? (
         <JourneySidebar
           journey={journey}
           journeyId={props.journeyId}

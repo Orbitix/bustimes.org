@@ -13,8 +13,8 @@ from .models import (
     Garage,
     Route,
     StopTime,
-    Trip,
     TimetableDataSource,
+    Trip,
     Version,
 )
 from .utils import get_routes
