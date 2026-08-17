@@ -210,3 +210,11 @@ YELL:
   url: ""
 FHAL:
   url: https://www.firstbus.co.uk/west-yorkshire/
+MNWB:
+  name: Metro Network - Warrington's Own Buses
+MNSC:
+  name: Metro Network - Stagecoach
+MNHT:
+  name: Metro Network - Huyton Travel
+MNGN:
+  name: Metro Network - Go North West
