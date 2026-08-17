@@ -42,7 +42,7 @@ import VehiclePopup from "./VehiclePopup";
 import { recordSkew } from "./clockSkew";
 import { getBounds, getFont } from "./utils";
 
-const apiRoot = process.env.API_ROOT;
+const apiRoot = process.env.apiRoot ?? "/";
 
 declare global {
   interface Window {
@@ -222,7 +222,7 @@ function Stops({
 }
 
 function fetchJson(url: string) {
-  return fetch(`/${url}`, {
+  return fetch(apiRoot + url, {
     credentials: "omit",
   }).then(
     (response) => {
@@ -788,7 +788,7 @@ export default function BigMap(
 
       vehiclesAbortController.current = new AbortController();
 
-      return fetch(`/vehicles.json${url}`, {
+      return fetch(`${apiRoot}vehicles.json${url}`, {
         credentials: "omit",
         signal: vehiclesAbortController.current.signal,
       })
