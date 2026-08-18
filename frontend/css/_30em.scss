@@ -61,3 +61,12 @@
 .long.wide {
     column-count: 1;
 }
+
+.vehicle-photo {
+    width: 170px;
+    min-height: 90px;
+
+    img {
+        width: 170px;
+    }
+}

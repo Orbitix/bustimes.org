@@ -219,8 +219,6 @@
     </form>
 {% endif %}
 
-<div id="history"></div>
-
 {% if vehicle and request.user.is_superuser %}
     <p><a href="{% url 'latest_journey_debug' vehicle.pk %}">Debug</a></p>
 {% endif %}
