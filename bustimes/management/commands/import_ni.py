@@ -53,3 +53,9 @@ class Command(BaseCommand):
                     command.route_ids = set()
 
                     handle_file(command, path)
+
+                    command.mark_old_services_as_not_current()
+
+                    command.finish_services()
+
+                    command.source.save()
