@@ -21,7 +21,7 @@ def time_range(lower, upper):
 class Situation(models.Model):
     source = models.ForeignKey(
         "busstops.DataSource",
-        models.CASCADE,
+        models.DB_CASCADE,
         limit_choices_to={
             "name__in": (
                 "bustimes.org",
@@ -157,7 +157,7 @@ class Situation(models.Model):
 
 class Link(models.Model):
     url = models.URLField()
-    situation = models.ForeignKey(Situation, models.CASCADE)
+    situation = models.ForeignKey(Situation, models.DB_CASCADE)
 
     def __str__(self):
         return self.url
@@ -166,7 +166,7 @@ class Link(models.Model):
 
 
 class ValidityPeriod(models.Model):
-    situation = models.ForeignKey(Situation, models.CASCADE)
+    situation = models.ForeignKey(Situation, models.DB_CASCADE)
     period = DateTimeRangeField()
 
     def __str__(self):
@@ -174,7 +174,7 @@ class ValidityPeriod(models.Model):
 
 
 class Consequence(models.Model):
-    situation = models.ForeignKey(Situation, models.CASCADE)
+    situation = models.ForeignKey(Situation, models.DB_CASCADE)
     stops = models.ManyToManyField("busstops.StopPoint", blank=True)
     services = models.ManyToManyField("busstops.Service", blank=True)
     operators = models.ManyToManyField("busstops.Operator", blank=True)
@@ -191,8 +191,8 @@ class Consequence(models.Model):
 
 
 class AffectedJourney(models.Model):
-    situation = models.ForeignKey(Situation, models.CASCADE)
-    trip = models.ForeignKey("bustimes.Trip", models.CASCADE)
+    situation = models.ForeignKey(Situation, models.DB_CASCADE)
+    trip = models.ForeignKey("bustimes.Trip", models.DB_CASCADE)
     date = models.DateField(null=True, blank=True)
     origin_departure_time = models.DateTimeField(null=True, blank=True)
     condition = models.CharField()  # cancelled, altered, etc
@@ -202,8 +202,8 @@ class AffectedJourney(models.Model):
 
 
 class Call(models.Model):
-    journey = models.ForeignKey(AffectedJourney, models.CASCADE)
-    stop_time = models.ForeignKey("bustimes.StopTime", models.CASCADE)
+    journey = models.ForeignKey(AffectedJourney, models.DB_CASCADE)
+    stop_time = models.ForeignKey("bustimes.StopTime", models.DB_CASCADE)
     arrival_time = models.DateTimeField(null=True, blank=True)
     departure_time = models.DateTimeField(null=True, blank=True)
     condition = models.CharField()

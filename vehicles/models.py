@@ -259,19 +259,19 @@ class Vehicle(models.Model):
     fleet_number = models.PositiveIntegerField(null=True, blank=True)
     fleet_code = models.CharField(max_length=24, blank=True, db_collation="en_numeric")
     reg = models.CharField(max_length=24, blank=True)
-    source = models.ForeignKey(DataSource, models.SET_NULL, null=True, blank=True)
-    operator = models.ForeignKey(Operator, models.SET_NULL, null=True, blank=True)
+    source = models.ForeignKey(DataSource, models.DB_SET_NULL, null=True, blank=True)
+    operator = models.ForeignKey(Operator, models.DB_SET_NULL, null=True, blank=True)
     vehicle_type = models.ForeignKey(
-        VehicleType, models.SET_NULL, null=True, blank=True
+        VehicleType, models.DB_SET_NULL, null=True, blank=True
     )
     colours = ColoursField(max_length=255, blank=True)
-    livery = models.ForeignKey(Livery, models.SET_NULL, null=True, blank=True)
+    livery = models.ForeignKey(Livery, models.DB_SET_NULL, null=True, blank=True)
     name = models.CharField(max_length=255, blank=True)
     branding = models.CharField(max_length=255, blank=True)
     notes = models.CharField(max_length=255, blank=True)
     latest_journey = models.OneToOneField(
         "VehicleJourney",
-        models.SET_NULL,
+        models.DB_SET_NULL,
         null=True,
         blank=True,
         related_name="latest_vehicle",
@@ -281,7 +281,7 @@ class Vehicle(models.Model):
     withdrawn = models.BooleanField(default=False)
     data = models.JSONField(null=True, blank=True)
     garage = models.ForeignKey(
-        "bustimes.Garage", models.SET_NULL, null=True, blank=True
+        "bustimes.Garage", models.DB_SET_NULL, null=True, blank=True
     )
     locked = models.BooleanField(default=False)
 
@@ -472,7 +472,7 @@ class Vehicle(models.Model):
 class VehicleCode(models.Model):
     code = models.CharField(max_length=100)
     scheme = models.CharField(max_length=24)
-    vehicle = models.ForeignKey(Vehicle, models.CASCADE)
+    vehicle = models.ForeignKey(Vehicle, models.DB_CASCADE)
 
     def __str__(self):
         return f"{self.scheme} {self.code}"
@@ -488,8 +488,8 @@ class VehicleCode(models.Model):
 
 
 class VehicleRevisionFeature(models.Model):
-    feature = models.ForeignKey(VehicleFeature, models.CASCADE)
-    revision = models.ForeignKey("VehicleRevision", models.CASCADE)
+    feature = models.ForeignKey(VehicleFeature, models.DB_CASCADE)
+    revision = models.ForeignKey("VehicleRevision", models.DB_CASCADE)
     add = models.BooleanField(default=True)
 
     def __str__(self):
@@ -501,29 +501,37 @@ class VehicleRevisionFeature(models.Model):
 
 
 class VehicleRevision(models.Model):
-    vehicle = models.ForeignKey(Vehicle, models.CASCADE)
+    vehicle = models.ForeignKey(Vehicle, models.DB_CASCADE)
 
     from_operator = models.ForeignKey(
-        Operator, models.SET_NULL, null=True, blank=True, related_name="revision_from"
+        Operator,
+        models.DB_SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revision_from",
     )
     to_operator = models.ForeignKey(
-        Operator, models.SET_NULL, null=True, blank=True, related_name="revision_to"
+        Operator, models.DB_SET_NULL, null=True, blank=True, related_name="revision_to"
     )
     from_type = models.ForeignKey(
         VehicleType,
-        models.SET_NULL,
+        models.DB_SET_NULL,
         null=True,
         blank=True,
         related_name="revision_from",
     )
     to_type = models.ForeignKey(
-        VehicleType, models.SET_NULL, null=True, blank=True, related_name="revision_to"
+        VehicleType,
+        models.DB_SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revision_to",
     )
     from_livery = models.ForeignKey(
-        Livery, models.SET_NULL, null=True, blank=True, related_name="revision_from"
+        Livery, models.DB_SET_NULL, null=True, blank=True, related_name="revision_from"
     )
     to_livery = models.ForeignKey(
-        Livery, models.SET_NULL, null=True, blank=True, related_name="revision_to"
+        Livery, models.DB_SET_NULL, null=True, blank=True, related_name="revision_to"
     )
 
     features = models.ManyToManyField(
@@ -534,11 +542,11 @@ class VehicleRevision(models.Model):
     message = models.TextField(null=True, blank=True)
 
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, models.SET_NULL, null=True, blank=True
+        settings.AUTH_USER_MODEL, models.DB_SET_NULL, null=True, blank=True
     )
     approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        models.SET_NULL,
+        models.DB_SET_NULL,
         null=True,
         blank=True,
         related_name="approved",
@@ -669,21 +677,21 @@ class VehicleJourney(models.Model):
     datetime = models.DateTimeField()
     date = models.DateField()
     service = models.ForeignKey(
-        Service, models.SET_NULL, null=True, blank=True, db_index=False
+        Service, models.DO_NOTHING, null=True, blank=True, db_index=False
     )
     route_name = models.CharField(max_length=64, blank=True)
-    source = models.ForeignKey(DataSource, models.CASCADE)
+    source = models.ForeignKey(DataSource, models.DB_CASCADE)
     vehicle = models.ForeignKey(
-        Vehicle, models.CASCADE, null=True, blank=True, db_index=False
+        Vehicle, models.DB_CASCADE, null=True, blank=True, db_index=False
     )
     code = models.CharField(max_length=255, blank=True)
     destination = models.CharField(max_length=255, blank=True)
     direction = models.CharField(max_length=13, blank=True)
     trip = models.ForeignKey(
-        "bustimes.Trip", models.SET_NULL, null=True, blank=True, db_index=False
+        "bustimes.Trip", models.DB_SET_NULL, null=True, blank=True, db_index=False
     )
     # trip_matched = models.BooleanField(default=True)
-    # block = models.ForeignKey("bustimes.Block", models.SET_NULL, null=True, blank=True)
+    # block = models.ForeignKey("bustimes.Block", models.DB_SET_NULL, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
 
     def get_absolute_url(self):
@@ -860,7 +868,7 @@ class SiriSubscription(models.Model):
         unique=True,
         help_text="There should be a DataSource with the same name as this",
     )
-    source = models.ForeignKey(DataSource, models.CASCADE)
+    source = models.ForeignKey(DataSource, models.DB_CASCADE)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     sample = models.TextField(null=True, blank=True)
     producer_url = models.URLField(null=True, blank=True, max_length=64)

@@ -23,8 +23,8 @@ class Invitation(models.Model):
 
 
 class OperatorUser(models.Model):
-    operator = models.ForeignKey("busstops.Operator", models.CASCADE)
-    user = models.ForeignKey("User", models.CASCADE)
+    operator = models.ForeignKey("busstops.Operator", models.DB_CASCADE)
+    user = models.ForeignKey("User", models.DB_CASCADE)
     staff = models.BooleanField(default=False)
 
     def __str__(self):

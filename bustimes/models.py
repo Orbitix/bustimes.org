@@ -30,7 +30,7 @@ class TimetableDataSource(models.Model):
     complete = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
     region = models.ForeignKey(
-        "busstops.Region", models.SET_NULL, null=True, blank=True
+        "busstops.Region", models.DB_SET_NULL, null=True, blank=True
     )
     notes = models.CharField(null=True, blank=True)
 
@@ -39,7 +39,7 @@ class TimetableDataSource(models.Model):
 
 
 class Version(models.Model):
-    source = models.ForeignKey(TimetableDataSource, models.CASCADE)
+    source = models.ForeignKey(TimetableDataSource, models.DB_CASCADE)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     datetime = models.DateTimeField(null=True, blank=True)
@@ -55,14 +55,14 @@ class Version(models.Model):
 
 
 class Route(models.Model):
-    source = models.ForeignKey("busstops.DataSource", models.CASCADE)
-    version = models.ForeignKey(Version, models.CASCADE, null=True, blank=True)
+    source = models.ForeignKey("busstops.DataSource", models.DB_CASCADE)
+    version = models.ForeignKey(Version, models.DB_CASCADE, null=True, blank=True)
     code = models.CharField(max_length=255, blank=True)  # qualified filename
     service_code = models.CharField(max_length=255, blank=True)
     revision_number_context = models.CharField(max_length=48, blank=True)
     line_id = models.CharField(max_length=255, blank=True)
     registration = models.ForeignKey(
-        "vosa.Registration", models.SET_NULL, null=True, blank=True
+        "vosa.Registration", models.DB_SET_NULL, null=True, blank=True
     )
     line_brand = models.CharField(max_length=255, blank=True)
     line_name = models.CharField(max_length=255, blank=True, db_collation="en_numeric")
@@ -78,7 +78,7 @@ class Route(models.Model):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     service = models.ForeignKey(
-        "busstops.Service", models.CASCADE, null=True, blank=True
+        "busstops.Service", models.DO_NOTHING, null=True, blank=True
     )
     public_use = models.BooleanField(null=True)
     file_hash = models.CharField(max_length=40, null=True, blank=True, db_index=True)
@@ -136,7 +136,7 @@ class BankHoliday(models.Model):
 
 
 class BankHolidayDate(models.Model):
-    bank_holiday = models.ForeignKey(BankHoliday, models.CASCADE)
+    bank_holiday = models.ForeignKey(BankHoliday, models.DB_CASCADE)
     date = models.DateField()
     scotland = models.BooleanField(
         null=True, help_text="Yes = Scotland only, No = not Scotland, Unknown = both"
@@ -152,8 +152,8 @@ class BankHolidayDate(models.Model):
 
 class CalendarBankHoliday(models.Model):
     operation = models.BooleanField()
-    bank_holiday = models.ForeignKey(BankHoliday, models.CASCADE)
-    calendar = models.ForeignKey("bustimes.Calendar", models.CASCADE)
+    bank_holiday = models.ForeignKey(BankHoliday, models.DB_CASCADE)
+    calendar = models.ForeignKey("bustimes.Calendar", models.DB_CASCADE)
 
     class Meta:
         unique_together = ("bank_holiday", "calendar")
@@ -188,7 +188,7 @@ class Calendar(models.Model):
     summary = models.CharField(max_length=255, blank=True)
     bank_holidays = models.ManyToManyField(BankHoliday, through=CalendarBankHoliday)
     source = models.ForeignKey(
-        "busstops.DataSource", models.CASCADE, null=True, blank=True
+        "busstops.DataSource", models.DB_CASCADE, null=True, blank=True
     )
 
     def contains(self, date):
@@ -327,7 +327,7 @@ class Calendar(models.Model):
 
 
 class CalendarDate(models.Model):
-    calendar = models.ForeignKey(Calendar, models.CASCADE)
+    calendar = models.ForeignKey(Calendar, models.DB_CASCADE)
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     operation = models.BooleanField()
@@ -364,7 +364,7 @@ class Note(models.Model):
 
 
 class Trip(models.Model):
-    route = models.ForeignKey(Route, models.CASCADE, null=True, blank=True)
+    route = models.ForeignKey(Route, models.DB_CASCADE, null=True, blank=True)
     inbound = models.BooleanField(default=False)
     journey_pattern = models.CharField(max_length=100, null=True, blank=True)
     vehicle_journey_code = models.CharField(max_length=100, null=True, blank=True)
@@ -374,19 +374,19 @@ class Trip(models.Model):
         "busstops.StopPoint", models.DO_NOTHING, null=True, blank=True
     )
     headsign = models.CharField(null=True, blank=True)
-    calendar = models.ForeignKey(Calendar, models.DO_NOTHING, null=True, blank=True)
+    calendar = models.ForeignKey(Calendar, models.DB_CASCADE, null=True, blank=True)
     sequence = models.PositiveSmallIntegerField(null=True, blank=True)
     notes = models.ManyToManyField(Note, blank=True)
     start = SecondsField()
     end = SecondsField()
-    garage = models.ForeignKey("Garage", models.SET_NULL, null=True, blank=True)
+    garage = models.ForeignKey("Garage", models.DB_SET_NULL, null=True, blank=True)
     vehicle_type = models.ForeignKey(
-        "VehicleType", models.SET_NULL, null=True, blank=True
+        "VehicleType", models.DB_SET_NULL, null=True, blank=True
     )
     operator = models.ForeignKey(
-        "busstops.Operator", models.SET_NULL, null=True, blank=True
+        "busstops.Operator", models.DB_SET_NULL, null=True, blank=True
     )
-    next_trip = models.OneToOneField("Trip", models.SET_NULL, null=True, blank=True)
+    next_trip = models.OneToOneField("Trip", models.DB_SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return format_timedelta(self.start, plus_one=True) or ""
@@ -491,7 +491,7 @@ class Trip(models.Model):
 
 class StopTime(models.Model):
     id = models.BigAutoField(primary_key=True)
-    trip = models.ForeignKey(Trip, models.CASCADE, db_index=False)
+    trip = models.ForeignKey(Trip, models.DB_CASCADE, db_index=False)
     stop_code = models.CharField(max_length=255, blank=True)
     stop = models.ForeignKey(
         "busstops.StopPoint", models.DO_NOTHING, null=True, blank=True
@@ -561,7 +561,7 @@ class StopTime(models.Model):
 
 class Garage(models.Model):
     operator = models.ForeignKey(
-        "busstops.Operator", models.SET_NULL, null=True, blank=True
+        "busstops.Operator", models.DB_SET_NULL, null=True, blank=True
     )
     code = models.CharField(max_length=50, blank=True)
     name = models.CharField(max_length=100, blank=True)

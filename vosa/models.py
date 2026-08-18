@@ -48,7 +48,7 @@ class Licence(models.Model):
 
 
 class Registration(models.Model):
-    licence = models.ForeignKey(Licence, models.CASCADE)
+    licence = models.ForeignKey(Licence, models.DB_CASCADE)
     registration_number = models.CharField(max_length=20, unique=True)
     service_number = models.CharField(max_length=100, blank=True)
     start_point = models.CharField(max_length=255, blank=True)
@@ -62,7 +62,7 @@ class Registration(models.Model):
     authority_description = models.CharField(max_length=255, blank=True)
     registered = models.BooleanField()
     latest_variation = models.ForeignKey(
-        "Variation", models.SET_NULL, null=True, blank=True, related_name="latest"
+        "Variation", models.DB_SET_NULL, null=True, blank=True, related_name="latest"
     )
 
     def __str__(self):
@@ -76,7 +76,7 @@ class Registration(models.Model):
 
 
 class Variation(models.Model):
-    registration = models.ForeignKey(Registration, models.CASCADE)
+    registration = models.ForeignKey(Registration, models.DB_CASCADE)
     variation_number = models.PositiveSmallIntegerField()
     effective_date = models.DateField(null=True, blank=True)
     date_received = models.DateField(null=True, blank=True)

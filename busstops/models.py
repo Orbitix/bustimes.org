@@ -212,7 +212,7 @@ class DataSource(models.Model):
     sha1 = models.CharField(max_length=40, null=True, blank=True, db_index=True)
     settings = models.JSONField(null=True, blank=True)
     source = models.ForeignKey(
-        TimetableDataSource, models.CASCADE, null=True, blank=True
+        TimetableDataSource, models.DO_NOTHING, null=True, blank=True
     )
     # for HTTP "if-modified-since" and "if-none-match":
     last_modified = models.DateTimeField(null=True, blank=True)
@@ -588,11 +588,13 @@ class Operator(SearchMixin, models.Model):
     aka = models.CharField(max_length=100, blank=True)
     slug = AutoSlugField(populate_from=str, editable=True, unique=True)
     vehicle_mode = models.CharField(max_length=48, blank=True)
-    group = models.ForeignKey(OperatorGroup, models.SET_NULL, null=True, blank=True)
+    group = models.ForeignKey(OperatorGroup, models.DB_SET_NULL, null=True, blank=True)
     siblings = models.ManyToManyField("self", blank=True)
-    region = models.ForeignKey(Region, models.SET_NULL, null=True, blank=True)
+    region = models.ForeignKey(Region, models.DB_SET_NULL, null=True, blank=True)
     regions = models.ManyToManyField(Region, blank=True, related_name="operators")
-    colour = models.ForeignKey("ServiceColour", models.SET_NULL, null=True, blank=True)
+    colour = models.ForeignKey(
+        "ServiceColour", models.DB_SET_NULL, null=True, blank=True
+    )
 
     address = models.CharField(max_length=128, blank=True)
     url = models.URLField(blank=True)
@@ -664,8 +666,8 @@ class StopCode(models.Model):
 
 
 class OperatorCode(models.Model):
-    operator = models.ForeignKey(Operator, models.CASCADE)
-    source = models.ForeignKey(DataSource, models.CASCADE)
+    operator = models.ForeignKey(Operator, models.DB_CASCADE)
+    source = models.ForeignKey(DataSource, models.DB_CASCADE)
     code = models.CharField(max_length=100, db_index=True)
 
     class Meta:

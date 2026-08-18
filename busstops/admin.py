@@ -365,6 +365,9 @@ class ServiceAdmin(GISModelAdmin):
             if other.current:
                 other.route_set.update(service=first)
                 first.operator.add(*other.operator.all())
+            else:
+                # route.service is no longer ON DELETE CASCADE
+                other.route_set.all().delete()
             other.vehiclejourney_set.update(service=first)
             other.servicecode_set.filter(
                 ~Exists(
