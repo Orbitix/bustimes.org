@@ -212,9 +212,14 @@ class TripSerializer(serializers.ModelSerializer):
             return
 
         if obj.route and obj.route.service:
+            stop_ids = {
+                stop_time.stop_id for stop_time in obj.stops if stop_time.stop_id
+            }
             route_links = {
                 (link.from_stop_id, link.to_stop_id): link
-                for link in obj.route.service.routelink_set.all()
+                for link in obj.route.service.routelink_set.filter(
+                    from_stop__in=stop_ids
+                )
             }
         else:
             route_links = {}

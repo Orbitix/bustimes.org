@@ -878,7 +878,6 @@ class StopPointDetailView(DetailView):
         if nearby is not None:
             context["nearby"] = (
                 nearby.exclude(pk=self.object.pk)
-                .filter(service__current=True)
                 .annotate(line_names=stop_line_names)
                 .defer("latlong")
             )
@@ -1317,8 +1316,10 @@ class ServiceDetailView(DetailView):
 
         def get_stopusages():
             stopusages = list(
-                self.object.stopusage_set.select_related("stop__locality").defer(
-                    "stop__latlong", "stop__locality__latlong"
+                self.object.stopusage_set.select_related("stop")
+                .defer("stop__latlong")
+                .prefetch_related(
+                    Prefetch("stop__locality", queryset=Locality.objects.only("name"))
                 )
             )
             # don't bother marking individual stops if they're all disrupted
@@ -1554,11 +1555,6 @@ def service_map_data(request, service_id):
             "coordinates": service.geometry.coords,
         }
     else:
-        route_links = {
-            (route_link.from_stop_id, route_link.to_stop_id): route_link
-            for route_link in service.routelink_set.all()
-        }
-
         # in theory the use of `distinct` might exclude some stops, but it's worth it
         trips = Trip.objects.filter(route__service=service).distinct(
             "destination", "journey_pattern", "inbound"
@@ -1577,6 +1573,13 @@ def service_map_data(request, service_id):
                 if previous_stop_id:
                     pairs.add((previous_stop_id, stop_id))
                 previous_stop_id = stop_id
+
+        route_links = {
+            (route_link.from_stop_id, route_link.to_stop_id): route_link
+            for route_link in service.routelink_set.filter(
+                from_stop__in={pair[0] for pair in pairs}
+            )
+        }
 
         line_string = []
         multi_line_string = [line_string]

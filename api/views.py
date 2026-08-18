@@ -4,7 +4,7 @@ from math import atan2, cos, degrees, radians, sin
 
 import numpy as np
 from django.contrib.postgres.aggregates import ArrayAgg
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -16,7 +16,7 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from sql_util.utils import Exists
 
-from busstops.models import Operator, Service, StopPoint
+from busstops.models import Locality, Operator, Service, StopPoint
 from bustimes.models import StopTime, Trip
 from bustimes.utils import contiguous_stoptimes_only
 from vehicles.models import (
@@ -159,10 +159,10 @@ class TripViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             stops = trips[0].stoptime_set.order_by("id")
         stops = (
-            stops.select_related("stop__locality").defer(
-                "stop__search_vector",
-                "stop__locality__search_vector",
-                "stop__locality__latlong",
+            stops.select_related("stop")
+            .defer("stop__search_vector")
+            .prefetch_related(
+                Prefetch("stop__locality", queryset=Locality.objects.only("name"))
             )
             # .annotate(
             #     call_condition=Subquery(

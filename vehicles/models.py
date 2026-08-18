@@ -768,22 +768,24 @@ class VehicleLocation:
     class Meta:
         ordering = ("id",)
 
+    def get_heading(self):
+        """Some sources give a float or a string - always return an int (or None)"""
+        if self.heading is None or type(self.heading) is int:
+            return self.heading
+        if type(self.heading) is str:
+            if self.heading.isdigit():
+                return int(self.heading)
+            if self.heading:
+                return round(float(self.heading))
+            return None
+        return round(self.heading)
+
     def get_appendage(self):
         delay = self.delay
         if delay is not None:
             delay = round(delay.total_seconds() / 60)
 
-        if self.heading is None or type(self.heading) is int:
-            heading = self.heading
-        elif type(self.heading) is str:
-            if self.heading.isdigit():
-                heading = int(self.heading)
-            elif self.heading:
-                heading = round(float(self.heading))
-            else:
-                heading = None
-        else:
-            heading = round(self.heading)
+        heading = self.get_heading()
 
         return self.journey.get_redis_key(), struct.pack(
             "I 2f ?h ?h",
@@ -816,7 +818,7 @@ class VehicleLocation:
             "id": self.id,  # (same as vehicle id)
             "journey_id": journey.id,
             "coordinates": self.latlong.coords,
-            "heading": self.heading,
+            "heading": self.get_heading(),
             "datetime": timezone.localtime(self.datetime, timezone=tz).isoformat(),
             "destination": journey.destination,
             "block": self.block,
