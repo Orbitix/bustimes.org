@@ -5,6 +5,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('busstops', '0018_alter_datasource_options_alter_region_options_and_more'),

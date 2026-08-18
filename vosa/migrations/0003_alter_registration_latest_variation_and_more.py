@@ -5,6 +5,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('vosa', '0002_alter_licence_authorised_discs_alter_licence_discs'),
