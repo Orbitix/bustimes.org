@@ -30,7 +30,7 @@ class ImportNornIronTest(TestCase):
             ]
         )
 
-    @patch("bustimes.management.commands.import_ni.ImportAtcoCif.handle_archive")
+    @patch("bustimes.management.commands.import_ni.handle_file")
     @patch("bustimes.management.commands.import_ni.download")
     @patch("bustimes.management.commands.import_ni.pprint.pprint")
     def test_import_ni(self, download, handle_archive, pprint):

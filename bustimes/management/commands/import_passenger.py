@@ -16,8 +16,13 @@ from busstops.models import DataSource
 
 from ...download_utils import write_file
 from ...models import TimetableDataSource, Version
-from .import_bod_timetables import clean_up, get_operator_ids, handle_file, logger
-from .import_transxchange import Command as TransXChangeCommand
+from .import_bod_timetables import (
+    clean_up,
+    get_command,
+    get_operator_ids,
+    handle_file,
+    logger,
+)
 
 
 def get_version(source, dates, url):
@@ -88,9 +93,7 @@ class Command(BaseCommand):
         parser.add_argument("operator_name", type=str, nargs="?")
 
     def handle(self, operator_name, *args, **options):
-        command = TransXChangeCommand()
-        command.set_up()
-
+        command = get_command()
         session = Session()
 
         prefix = "https://data.discoverpassenger.com/operator"
