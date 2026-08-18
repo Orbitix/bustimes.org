@@ -262,7 +262,6 @@ if REDIS_URL and not TEST:
         "LOCATION": REDIS_URL,
         "KEY_PREFIX": os.environ.get("CACHE_KEY_PREFIX", ""),
         "OPTIONS": {
-            "pool_class": "buses.redis_pool.SharedConnectionPool",
             "socket_timeout": 3,
             "socket_connect_timeout": 2,
             "socket_keepalive": True,
