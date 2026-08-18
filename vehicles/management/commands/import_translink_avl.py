@@ -35,6 +35,7 @@ class Command(ImportLiveVehiclesCommand):
     @staticmethod
     def get_journey_identity(item):
         return (
+            item["DayOfOperation"],
             item["JourneyIdentifier"],
             item["DirectionText"],
             item["LineText"],
