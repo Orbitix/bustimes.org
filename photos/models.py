@@ -1,29 +1,64 @@
 from django.conf import settings
 from django.contrib.gis.db import models
+from django.contrib.postgres.fields import ArrayField
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit
+from imagekit.specs import ImageSpec
+
+from .processors import SmartCrop
+
+
+class SmartSpec(ImageSpec):
+    """An image spec that crops around the vehicle, if we've detected one.
+
+    Including the bounding box in the processors means the cache file name
+    changes when the box does, so a corrected box takes effect immediately.
+    """
+
+    format = "JPEG"
+    options = {"quality": 60}
+
+    aspect = None
+    padding = 0.1
+    resize = None
+
+    @property
+    def processors(self):
+        instance = getattr(self.source, "instance", None)
+        bbox = getattr(instance, "bbox", None)
+        if bbox:
+            # the resize is still needed, but has nothing left to crop
+            return [SmartCrop(bbox, self.aspect, self.padding), self.resize]
+        return [self.resize]
+
+
+class OpenGraph(SmartSpec):
+    aspect = 1200 / 630
+    padding = 0.12
+    resize = ResizeToFill(1200, 630)
+
+
+class Thumbnail(SmartSpec):
+    """Keeps the photo's own aspect ratio, just moves in a bit closer"""
+
+    padding = 0.15
+    resize = ResizeToFit(320, upscale=False)
 
 
 class Photo(models.Model):
     image = models.ImageField()
-    image_1200_630 = ImageSpecField(
-        source="image",
-        processors=[ResizeToFill(1200, 630)],
-        format="JPEG",
-        options={"quality": 60},
-    )
+
+    # [x1, y1, x2, y2] as fractions of the image size - see photos.detect
+    bbox = ArrayField(models.FloatField(), size=4, null=True, blank=True)
+
+    image_1200_630 = ImageSpecField(source="image", spec=OpenGraph)
     image_1200 = ImageSpecField(
         source="image",
         processors=[ResizeToFit(1200, upscale=False)],
         format="JPEG",
         options={"quality": 60},
     )
-    image_320 = ImageSpecField(
-        source="image",
-        processors=[ResizeToFit(320, upscale=False)],
-        format="JPEG",
-        options={"quality": 60},
-    )
+    image_320 = ImageSpecField(source="image", spec=Thumbnail)
     credit = models.CharField(max_length=255, blank=True)
     caption = models.CharField(max_length=255, blank=True)
     url = models.URLField(blank=True, verbose_name="URL")
