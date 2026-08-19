@@ -180,14 +180,12 @@ class SourceDetailView(DetailView):
 @require_GET
 @login_required
 def route_xml(request, source, code=""):
-    """A way of viewing the TransXChange document* behind a route,
+    """A way of viewing the TransXChange document behind a route,
     for debugging purposes
 
     Ideally should work by downloading the file from bustimes.org's archive on
     S3 (or an S3-compatible object storage service), rather than repeatedly
     downloading from the original source.
-
-    * in theory also works for ATCO-CIF. but not GTFS
     """
 
     source = get_object_or_404(DataSource, id=source)

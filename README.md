@@ -12,7 +12,7 @@ accounts | user accounts
 api      | the Django Rest Framework–powered API
 buses    | contains the site settings.py
 busstops | bus stops - but also operating companies, places, and routes 🤯 and the site's static file assets
-bustimes | getting timetable data out of various formats (GTFS, TransXChange, ATCO-CIF) and into a database and doing stuff therewith
+bustimes | getting timetable data out of various formats (GTFS, TransXChange, ~~ATCO-CIF~~) and into a database and doing stuff therewith
 config   | Kamal and Supervisor configuration
 departures | listing the "next departures" at a bus stop – from a timetable and/or predicted by an API
 disruptions | information about like roadworks, diversions and stuff
