@@ -42,6 +42,20 @@ servers:
         - FLICKR_API_KEY
 
 accessories:
+  # re-exposes the web containers' granian metrics on port 9394 for prometheus
+  metrics:
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    roles:
+      - web
+    port: 9394:9394
+    files:
+      - config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    options:
+      # the image runs as an unprivileged user, which can't read the docker socket
+      user: "0:0"
+
   tileserver:
     image: maptiler/tileserver-gl-light
     host: 167.99.89.1
