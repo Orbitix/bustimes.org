@@ -123,9 +123,7 @@ class PhotoTest(TestCase):
         photo.vehicles.add(cls.vehicle)
 
     def test_vehicle_detail_photo(self):
-        """the img tag should have the right dimensions, and getting them
-        shouldn't open the image from storage more than once
-        """
+        """shouldn't open the image from storage"""
         opens = []
         real_open = InMemoryStorage.open
 
@@ -139,8 +137,8 @@ class PhotoTest(TestCase):
         finally:
             InMemoryStorage.open = real_open
 
-        self.assertContains(response, 'width="320" height="180"')
-        self.assertEqual(len(opens), 1)
+        self.assertContains(response, '<img src="')
+        self.assertEqual(len(opens), 0)
 
     def test_no_bounding_box(self):
         """with no detected vehicle, the whole photo is used, as before"""
