@@ -125,7 +125,7 @@ class Command(BaseCommand):
 
             if licence.address != line["Address"]:
                 if licence.address:
-                    print(licence.address, line["Address"])
+                    logger.info("%s %s", licence.address, line["Address"])
                 licence.address = line["Address"]
 
             if licence.traffic_area:
@@ -308,4 +308,4 @@ class Command(BaseCommand):
 
         for lic in lics.values():
             if lic not in lics_to_create and lic not in lics_to_update:
-                print(lic.licence_number, lic.delete())
+                logger.info("%s %s", lic.licence_number, lic.delete())

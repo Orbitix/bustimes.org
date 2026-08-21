@@ -1,9 +1,12 @@
+import logging
 import time
 
 import requests
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection
+
+logger = logging.getLogger(__name__)
 
 
 def get_content(slug):
@@ -37,7 +40,7 @@ class Command(BaseCommand):
             cursor.execute("LISTEN new_vehicle")
             gen = cursor.connection.notifies()
             for notify in gen:
-                print(notify)
+                logger.info(notify)
 
                 if notify.payload.startswith("rtcsnv-") or len(notify.payload) > 40:
                     continue
@@ -51,6 +54,6 @@ class Command(BaseCommand):
                     timeout=10,
                 )
 
-                print(response, response.headers, response.text)
+                logger.info("%s %s %s", response, response.headers, response.text)
 
                 time.sleep(5)

@@ -159,7 +159,7 @@ class ImportLiveVehiclesCommand(BaseCommand):
                 # timestamp isn't newer
                 # but allow if the latest journey from another source has no service info
                 if not (
-                    vehicle.latest_journey_id
+                    vehicle.latest_journey
                     and vehicle.latest_journey.source_id != self.source.id
                     and not vehicle.latest_journey.service_id
                 ):

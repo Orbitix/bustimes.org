@@ -217,6 +217,11 @@ class BusOpenDataVehicleLocationsTest(TestCase):
     )
     @time_machine.travel("2020-10-17T08:34:09", tick=False)
     def test_new_bod_avl_b(self):
+        # vehicles with implausibly future timestamps
+        self.enterContext(
+            self.assertLogs("vehicles.management.import_live_vehicles", "WARNING")
+        )
+
         items = [
             {
                 "RecordedAtTime": "2020-10-17T08:34:00+00:00",
@@ -1164,9 +1169,12 @@ class BusOpenDataVehicleLocationsTest(TestCase):
         self.assertEqual(items, [])
 
         self.source.url = "https://bustimes.org/404"
-        with use_cassette(str(self.vcr_path / "bod_avl_error.yaml")):
+        with (
+            use_cassette(str(self.vcr_path / "bod_avl_error.yaml")),
+            self.assertLogs("vehicles.management.commands.import_bod_avl", "WARNING"),
+        ):
             items = command.get_items()
-            self.assertEqual(items, [])
+        self.assertEqual(items, [])
 
     def test_tfw_bods_coexistence(self):
         tfw = DataSource.objects.create(name="Transport for Wales")

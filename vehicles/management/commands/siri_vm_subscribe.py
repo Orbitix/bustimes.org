@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -8,6 +9,8 @@ from requests_toolbelt.adapters.source import SourceAddressAdapter
 from xmltodict import unparse
 
 from ...models import SiriSubscription
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -35,7 +38,7 @@ class Command(BaseCommand):
                 if (now - stats[-1][0]) < timedelta(minutes=5):
                     return
             else:
-                print(f"no {subscription} history, subscribing")
+                logger.info("no %s history, subscribing", subscription)
 
         if subscription.username and subscription.password:
             auth = requests.auth.HTTPBasicAuth(
@@ -64,15 +67,14 @@ class Command(BaseCommand):
                     }
                 }
             )
-            print(data)
+            logger.info(data)
             res = session.post(
                 subscription.producer_url,
                 data=data,
                 headers={"content-type": "text/xml"},
                 auth=auth,
             )
-            print(res)
-            print(res.text)
+            logger.info("%s %s", res, res.text)
             return
 
         consumer_address = f"{consumer_address}/siri/{subscription.uuid}"
@@ -107,12 +109,11 @@ class Command(BaseCommand):
             }
         )
 
-        print(data)
+        logger.info(data)
         res = session.post(
             subscription.producer_url,
             data=data,
             headers={"content-type": "text/xml"},
             auth=auth,
         )
-        print(res)
-        print(res.text)
+        logger.info("%s %s", res, res.text)

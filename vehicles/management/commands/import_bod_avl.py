@@ -620,7 +620,7 @@ class Command(ImportLiveVehiclesCommand):
         fetched_at = timezone.now()
 
         if not response.ok:
-            print(response.headers, response.content, response)
+            logger.warning("%s %s %s", response, response.headers, response.content)
             return []
 
         if response.headers["content-type"] == "application/zip":
@@ -740,8 +740,8 @@ class Command(ImportLiveVehiclesCommand):
             age = int((now - self.source.datetime).total_seconds())
             if age > 0:
                 self.hist[now.second % 10] = age
-                print(self.hist)
-                print(
+                logger.info(self.hist)
+                logger.info(
                     f"{now.second=} {age=}  {total_items=}  {len(changed_items)=}  {len(changed_journey_items)=}"
                 )
 
@@ -769,7 +769,7 @@ class Command(ImportLiveVehiclesCommand):
             bod_status = bod_status[-50:]
             cache.set("bod_avl_status", bod_status, 800)
 
-            print(f"{time_taken=}")
+            logger.info(f"{time_taken=}")
 
             if time_taken > 11:
                 return 0
@@ -787,7 +787,7 @@ class Command(ImportLiveVehiclesCommand):
                 if wait <= 0:
                     wait += 10
                 diff = worst_hour - witching_hour
-                print(f"{witching_hour=} {worst_hour=} {diff=} {now=} {wait=}\n")
+                logger.info(f"{witching_hour=} {worst_hour=} {diff=} {now=} {wait=}")
                 if diff % 10 == 9:
                     return wait
 

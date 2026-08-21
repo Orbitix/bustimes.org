@@ -14,6 +14,7 @@ import zipfile
 from functools import cache
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.gis.geos import GEOSGeometry, Point
 from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError
@@ -392,7 +393,7 @@ def get_description(txc_service):
 
     if origin and destination:
         if origin[:4].isdigit() and destination[:4].isdigit():
-            print(origin, destination)
+            logger.warning("%s %s", origin, destination)
 
         if origin.isupper() and destination.isupper():
             txc_service.origin = origin = titlecase(origin, callback=initialisms)
@@ -427,7 +428,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--progress",
             action="store_true",
-            default=sys.stdout.isatty(),
+            default=sys.stdout.isatty() and not settings.TEST,
             help="Show progress bar (default: auto-detect based on terminal)",
         )
 
@@ -1629,7 +1630,7 @@ class Command(BaseCommand):
                 if (
                     atco_code.isdigit() and f"0{atco_code}" in stops
                 ):  # "36006002112" = "036006002112"
-                    logger.warning(f"{atco_code} 0{atco_code}")
+                    logger.warning("_0_%s", atco_code)
                     stops[atco_code_upper] = stops[f"0{atco_code}"]
                 elif atco_code[:3] == "910" and atco_code[:-1] in stops:
                     stops[atco_code_upper] = stops[atco_code[:-1]]
