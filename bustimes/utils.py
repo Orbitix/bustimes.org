@@ -178,6 +178,14 @@ def get_calendars(when: date | datetime, calendar_ids=None, scotland=None):
     )
 
 
+def get_calendar_ids(when: date, routes, scotland=None) -> list:
+    return list(
+        get_calendars(when, scotland=scotland)
+        .filter(id__in=Trip.objects.filter(route__in=routes).values("calendar_id"))
+        .values_list("id", flat=True)
+    )
+
+
 def get_other_trips_in_block(trip, date):
     if not trip.route_id:
         return Trip.objects.none()
@@ -228,12 +236,9 @@ def get_stop_times(date: date, time: timedelta | None, stop, routes, trip_ids=No
 
         scotland = stop.pk[:1] == "6" and ":" not in stop.pk and stop.pk[:4].isdigit()
 
-        if not routes:
-            times = times.none()
-
         times = times.filter(
             trip__route__in=routes,
-            trip__calendar__in=get_calendars(date, scotland=scotland),
+            trip__calendar__in=get_calendar_ids(date, routes, scotland=scotland),
         )
 
         if time is not None:
@@ -246,7 +251,7 @@ def get_stop_times(date: date, time: timedelta | None, stop, routes, trip_ids=No
                     F("departure") + midnight.timestamp(),
                     output_field=DateTimeField(),
                 )
-            ).order_by("departure_time")
+            ).order_by("departure_time", "id")
         else:
             times = times.filter(departure__isnull=False)
 

@@ -298,13 +298,13 @@ class ScheduleAdherenceTest(TestCase):
                 "2024-02-16T10:59:07+00:00",
             )
 
-            with self.assertNumQueries(11):
+            with self.assertNumQueries(14):
                 response = self.client.get("/stops/210021509680/departures")
                 self.assertContains(response, "10:43")  # scheduled time
                 self.assertContains(response, "10:59")  # expected time
 
             # past the scheduled time - should still show late departure
-            with time_machine.travel("2024-02-16T10:50:00Z"), self.assertNumQueries(9):
+            with time_machine.travel("2024-02-16T10:50:00Z"), self.assertNumQueries(11):
                 response = self.client.get("/stops/210021509680/departures")
                 self.assertContains(response, "10:43")  # scheduled time
                 self.assertContains(response, "10:59")  # expected time

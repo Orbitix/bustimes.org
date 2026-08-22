@@ -48,7 +48,7 @@ class ScheduledDeparturesTest(TestCase):
         StopUsage.objects.create(service=service, stop_id="230ABCDE", order=0)
 
     def test_departures(self):
-        with self.assertNumQueries(8):
+        with self.assertNumQueries(10):
             response = self.client.get(
                 "/stops/230ABCDE/departures?date=2022-05-04&time=01:00"
             )

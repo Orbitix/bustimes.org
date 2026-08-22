@@ -235,9 +235,13 @@ class TimetableDepartures(Departures):
         yesterday_date = (self.now - one_day).date()
         yesterday_time = time_since_midnight + one_day
 
+        branch_limit = self.per_page + 8
         all_today_times = (
-            self.get_times(yesterday_date, yesterday_time)
-            .union(self.get_times(date, time_since_midnight, day_shift=1), all=True)
+            self.get_times(yesterday_date, yesterday_time)[:branch_limit]
+            .union(
+                self.get_times(date, time_since_midnight, day_shift=1)[:branch_limit],
+                all=True,
+            )
             .order_by("order", "id")
         )
         today_times = list(all_today_times[: self.per_page])
