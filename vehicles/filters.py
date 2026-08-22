@@ -1,4 +1,3 @@
-from django.db.models import Q
 from django.forms.widgets import NumberInput, TextInput
 from django_filters import ChoiceFilter, FilterSet, ModelChoiceFilter
 
@@ -32,8 +31,14 @@ class VehicleRevisionFilter(FilterSet):
     )
 
     def operator_filter(self, queryset, _, value):
+        revisions = queryset.model.objects
         return queryset.filter(
-            Q(vehicle__operator=value) | Q(from_operator=value) | Q(to_operator=value)
+            id__in=revisions.filter(vehicle__operator=value)
+            .values("id")
+            .union(
+                revisions.filter(from_operator=value).values("id"),
+                revisions.filter(to_operator=value).values("id"),
+            )
         )
 
     def status_filter(self, queryset, _, value):
