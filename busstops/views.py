@@ -1716,15 +1716,19 @@ def search(request):
 
                 queryset = queryset.annotate(rank=rank).order_by("-rank")
 
-                if key == "operators" or key == "localities":
-                    queryset = queryset.annotate(
-                        headline=SearchHeadline("name", query, config="english")
-                    )
-                elif key == "services":
-                    queryset = queryset.annotate(
-                        headline=SearchHeadline("description", query, config="english")
-                    )
-                context[key] = Paginator(queryset, 20).get_page(request.GET.get("page"))
+                page = Paginator(queryset, 20).get_page(request.GET.get("page"))
+
+                # SearchHeadlines for just this page of results
+                field = "description" if key == "services" else "name"
+                headlines = dict(
+                    queryset.model.objects.filter(pk__in=[obj.pk for obj in page])
+                    .annotate(headline=SearchHeadline(field, query, config="english"))
+                    .values_list("pk", "headline")
+                )
+                for obj in page:
+                    obj.headline = headlines[obj.pk]
+
+                context[key] = page
 
             vehicles = Vehicle.objects.select_related("operator")
             query_text = query_text.replace(" ", "")
