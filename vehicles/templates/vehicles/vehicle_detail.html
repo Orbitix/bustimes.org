@@ -16,12 +16,12 @@
         <meta property="og:description" content="{% firstof object.vehicle_type object.operator %}{% if object.name %}
 
 {{ object.name }}{% endif %}">
-        {% with photos=vehicle.photo_set.all %}{% if photos %}
+        {% if photo %}
             <meta name="twitter:card" content="summary_large_image">
-            <meta property="og:image" content="{{ photos.0.image_1200_630.url }}">
+            <meta property="og:image" content="{{ photo.image_1200_630.url }}">
             <meta property="og:image:width" content="1200">
             <meta property="og:image:height" content="630">
-        {% endif %}{% endwith %}
+        {% endif %}
     {% endif %}
 {% endblock head %}
 
@@ -30,20 +30,20 @@
 {% block content %}
 
 {% if vehicle %}
-    {% with photos=vehicle.photo_set.all %}{% if photos %}
+    {% if photo %}
         <figure class="vehicle-photo">
-            {% if form %}<a href="{% url 'admin:photos_photo_change' photos.0.id %}">{% endif %}
-            <img src="{{ photos.0.image_320.url }}" />
-            {% if photos.0.credit %}
+            {% if form %}<a href="{% url 'admin:photos_photo_change' photo.id %}">{% endif %}
+            <img src="{{ photo.image_320.url }}" />
+            {% if photo.credit %}
                 <figcaption>
-                    {% if photos.0.url %}
-                        <a href="{{ photos.0.url }}">{{ photos.0.credit }}</a>
-                    {% else %}{{ photos.0.credit }}{% endif %}
+                    {% if photo.url %}
+                        <a href="{{ photo.url }}">{{ photo.credit }}</a>
+                    {% else %}{{ photo.credit }}{% endif %}
                 </figcaption>
             {% endif %}
             {% if form %}</a>{% endif %}
         </figure>
-    {% endif %}{% endwith %}
+    {% endif %}
 
     <h1>
         {% if vehicle.reg %}

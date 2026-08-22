@@ -844,6 +844,10 @@ class VehicleDetailView(DetailView):
         if self.request.user.has_perm("photos.add_photo"):
             context["form"] = self.form or PhotoForm()
 
+        context["photo"] = self.object.photo_set.filter(
+            livery=self.object.livery_id
+        ).last()
+
         return context
 
     def render_to_response(self, context):
@@ -874,8 +878,8 @@ class VehicleDetailView(DetailView):
                     form.add_error("url", "That doesn't look like a Flickr photo URL")
                 except WrongLicense:
                     form.add_error("url", "That photo isn't permissively licensed")
-                except HTTPError:
-                    form.add_error("url", "Couldn't get the photo from Flickr")
+                except HTTPError as e:
+                    form.add_error("url", f"Couldn't get the photo from Flickr ({e})")
 
         if form.errors:
             self.form = form

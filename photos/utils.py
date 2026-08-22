@@ -25,8 +25,10 @@ def add_uploaded_photo(image, vehicle, request):
     suffix = Path(image.name).suffix.lower() or ".jpg"
     photo.image.save(get_sha1(content) + suffix, ContentFile(content))
     photo.user = request.user
+    photo.livery_id = vehicle.livery_id
     photo.save()
     photo.vehicles.add(vehicle)
+    detect_photo_subject(photo.id)
 
 
 def add_flickr_photo(url, vehicle, request):
@@ -67,6 +69,7 @@ def add_flickr_photo(url, vehicle, request):
     original = session.get(url)
     photo.image.save(get_sha1(original.content) + ".jpg", ContentFile(original.content))
     photo.user = request.user
+    photo.livery_id = vehicle.livery_id
     photo.save()
     photo.vehicles.add(vehicle)
     detect_photo_subject(photo.id)
