@@ -21,7 +21,7 @@ from django.db import (
     router,
     transaction,
 )
-from django.db.models import Case, F, Max, OuterRef, Q, Value, When
+from django.db.models import Case, F, OuterRef, Q, Value, When
 from django.db.models.aggregates import StringAgg
 from django.db.models.functions import Coalesce, Now
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
@@ -659,7 +659,7 @@ def journeys_list(request, journeys, service=None, vehicle=None) -> dict:
         if vehicle and vehicle.latest_journey:
             date = last_date
         else:
-            date = journeys.aggregate(max_date=Max("date"))["max_date"]
+            date = journeys.order_by("-date").values_list("date", flat=True).first()
 
     if dates:
         context["dates"] = dates
