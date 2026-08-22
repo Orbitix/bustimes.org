@@ -119,7 +119,7 @@ def get_stop_area(element):
 
     return StopArea(
         id=stop_area_code,
-        name=element.findtext("Name", "").strip().replace("`", "'"),
+        name=element.findtext("Name", "").replace("`", "'"),
         latlong=point,
         active=element.attrib.get("Status", "active") == "active",
         admin_area_id=element.findtext("AdministrativeAreaRef"),
@@ -140,10 +140,10 @@ class Command(BaseCommand):
         # we assume (dubiously) that it has no more than 1 active one
         for stop_area_ref in element.findall("StopAreas/StopAreaRef"):
             if stop_area_ref.attrib.get("Modification") != "delete":
-                stop.stop_area_id = stop_area_ref.text
+                stop.stop_area_id = stop_area_ref.text or None
                 # break
 
-        stop.locality_id = element.findtext("Place/NptgLocalityRef")
+        stop.locality_id = element.findtext("Place/NptgLocalityRef") or None
         if stop.locality_id and stop.locality_id not in self.localities:
             logger.warning("%s locality %s does not exist", atco_code, stop.locality_id)
             stop.locality_id = None
@@ -311,6 +311,9 @@ class Command(BaseCommand):
 
         for event, element in ET.iterparse(path):
             element.tag = element.tag.removeprefix("{http://www.naptan.org.uk/}")
+
+            if element.text:
+                element.text = element.text.strip()
 
             if element.tag == "StopPoint":
                 atco_code = element.findtext("AtcoCode")
