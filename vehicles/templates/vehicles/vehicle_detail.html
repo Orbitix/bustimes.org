@@ -32,6 +32,7 @@
 {% if vehicle %}
     {% with photos=vehicle.photo_set.all %}{% if photos %}
         <figure class="vehicle-photo">
+            {% if form %}<a href="{% url 'admin:photos_photo_change' photos.0.id %}">{% endif %}
             <img src="{{ photos.0.image_320.url }}" />
             {% if photos.0.credit %}
                 <figcaption>
@@ -40,6 +41,7 @@
                     {% else %}{{ photos.0.credit }}{% endif %}
                 </figcaption>
             {% endif %}
+            {% if form %}</a>{% endif %}
         </figure>
     {% endif %}{% endwith %}
 
@@ -218,8 +220,6 @@
         <input type="submit">
     </form>
 {% endif %}
-
-<div id="history"></div>
 
 {% if vehicle and request.user.is_superuser %}
     <p><a href="{% url 'latest_journey_debug' vehicle.pk %}">Debug</a></p>

@@ -1464,10 +1464,13 @@ input:not(:checked) + label {
 }
 
 .contact-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1em;
-    overflow-wrap: anywhere;
+    margin-top: -1em;
+
+    > div {
+        display: inline-block;
+        margin: 1em 1em 0 0;
+        vertical-align: top;
+    }
 
     dt {
         font-size: 12px;
@@ -1509,14 +1512,15 @@ nav {
 
 .vehicle-photo {
     float: right;
-    width: 170px;
+    margin: 0 0 1em 1em;
+    width: 140px;
     position: relative;
-    margin: 0;
+
     min-height: 70px;
 
     img {
         display: block;
-        width: 170px;
+        width: 140px;
         height: auto;
     }
 
