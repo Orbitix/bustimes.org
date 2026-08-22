@@ -120,6 +120,9 @@ gtag('config', 'G-X2Z0KM7Z5C');
         <li><a href="https://status.bustimes.org">Status</a></li>
         <li><a href="/privacy">Privacy policy</a></li>
         {% if ad %}<li><a href="javascript:window.__tcfapi('displayConsentUi',2,function(){})">Privacy settings</a></li>{% endif %}
+        {% if object and not user.is_authenticated %}
+            <li><a href="/accounts/login/?next={{ request.path }}">Log in</a></li>
+        {% endif %}
     </ul>
 </footer>
 {% endblock footer %}
