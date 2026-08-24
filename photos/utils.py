@@ -60,9 +60,7 @@ def add_flickr_photo(url, vehicle, request):
         raise WrongLicense()
 
     if info["photo"]["owner"]["path_alias"] != "goodwinjoshua":
-        photo.credit = (
-            info["photo"]["owner"]["realname"] or info["photo"]["owner"]["username"]
-        )
+        photo.credit = info["photo"]["owner"]["username"]
     photo.caption = info["photo"]["title"]["_content"]
     response = session.get(
         "https://www.flickr.com/services/rest",
