@@ -1486,6 +1486,10 @@ input:not(:checked) + label {
     }
 }
 
+.vehicle-photo + h1 + .contact-details > div:first-child {
+    max-width: calc(100% - 140px - 1em);
+}
+
 .previous {
     float: left;
 }
@@ -1513,7 +1517,7 @@ nav {
 
 .vehicle-photo {
     float: right;
-    margin: 0 0 0 .5em;
+    margin: 0;
     width: 140px;
     position: relative;
 
