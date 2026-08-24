@@ -4,6 +4,8 @@ from pathlib import Path
 import requests
 from django.conf import settings
 from django.core.files.base import ContentFile
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 
 from .models import Photo
 from .tasks import detect_photo_subject
@@ -35,6 +37,8 @@ def add_flickr_photo(url, vehicle, request):
     photo_id = url.split("/photos/", 1)[1].split("/")[1]
     photo = Photo()
     session = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=(502, 503, 504))
+    session.mount("https://", HTTPAdapter(max_retries=retries))
     session.headers.update({"User-Agent": "bustimes.org"})
     session.params = {
         "format": "json",
@@ -45,6 +49,7 @@ def add_flickr_photo(url, vehicle, request):
     response = session.get(
         "https://www.flickr.com/services/rest",
         params={"method": "flickr.photos.getInfo"},
+        timeout=10,
     )
     response.raise_for_status()
     info = response.json()
@@ -62,11 +67,12 @@ def add_flickr_photo(url, vehicle, request):
     response = session.get(
         "https://www.flickr.com/services/rest",
         params={"method": "flickr.photos.getSizes"},
+        timeout=10,
     )
     response.raise_for_status()
     sizes = response.json()
     url = sizes["sizes"]["size"][-1]["source"]
-    original = session.get(url)
+    original = session.get(url, timeout=10)
     photo.image.save(get_sha1(original.content) + ".jpg", ContentFile(original.content))
     photo.user = request.user
     photo.livery_id = vehicle.livery_id
