@@ -1503,6 +1503,7 @@ nav {
     }
 }
 
+// table header
 .sticky {
     position: sticky;
     top: 0;
@@ -1563,10 +1564,15 @@ nav {
         top: 0;
         pointer-events: none;
         z-index: 9999;
+        container-type: scroll-state;
 
         iframe {
             background: var(--background-color);
             pointer-events: auto;
+
+            @container scroll-state(stuck: top) {
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.63);
+            }
         }
     }
 }
