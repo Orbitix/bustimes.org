@@ -603,7 +603,7 @@ def get_dates(vehicle=None, service=None, after=None):
         cursor.execute(
             f"""WITH RECURSIVE dates AS (
                 (SELECT date FROM vehicles_vehiclejourney
-                 WHERE vehicle_id = %(vehicle)s AND date IS NOT NULL {after_condition}
+                 WHERE vehicle_id = %(vehicle)s {after_condition}
                  ORDER BY date LIMIT 1)
                 UNION ALL
                 SELECT (SELECT date FROM vehicles_vehiclejourney
