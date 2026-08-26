@@ -218,7 +218,7 @@ class Command(BaseCommand):
             trip.end = line.arrival_time
 
         for trip_id, trip in trips.items():
-            if trip.start is None:
+            if pd.isna(trip.start) or pd.isna(trip.end):
                 logger.warning(f"trip {trip_id} has no stop times")
                 trips[trip_id] = None
 
@@ -234,6 +234,9 @@ class Command(BaseCommand):
             ) as copy,
         ):
             for line in feed.stop_times.itertuples():
+                if trips[line.trip_id] is None:
+                    continue
+
                 timing_point = bool(getattr(line, "timepoint", 1))
 
                 pick_up = None
