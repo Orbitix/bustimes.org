@@ -539,6 +539,7 @@ class BusOpenDataVehicleLocationsTest(TestCase):
                     "reg": "BB62BUS",
                 },
                 "route_name": "146",
+                "time_aware_polyline": "iifIokk~Hsxrhw~A",
                 "destination": "Southwold",
                 "trip_id": None,
                 "live": [
