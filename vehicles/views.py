@@ -146,13 +146,17 @@ def liveries_css(request, version=0):
         livery_group = list(livery_group)
         styles += livery_group[0].get_styles([livery.id for livery in livery_group])
     styles = "".join(styles)
-    completed_process = subprocess.run(
-        ["lightningcss", "--minify"],
-        input=styles.encode(),
-        capture_output=True,
-        check=True,
-    )
-    styles = completed_process.stdout
+    try:
+        completed_process = subprocess.run(
+            ["lightningcss", "--minify"],
+            input=styles.encode(),
+            capture_output=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        styles = completed_process.stdout
     return HttpResponse(styles, content_type="text/css")
 
 
