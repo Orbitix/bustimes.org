@@ -175,7 +175,7 @@ function Row({
         {actual}
       </tr>
       {rowSpan ? (
-        <tr className={className}>
+        <tr className={className} onPointerEnter={handlePointerEnter}>
           <td>{formatTime(stop.aimed_departure_time)}</td>
         </tr>
       ) : null}

@@ -83,15 +83,6 @@ function containsBounds(
   a: LngLatBounds | null,
   b: LngLatBounds,
 ): boolean | undefined {
-  // console.log(a, b);
-  // if (a) {
-  //   console.log("N", a.getNorth(), b.getNorth(), a.getNorth() >= b.getNorth());
-  //   console.log("E ", a.getEast(), b.getEast(), a.getEast() >= b.getEast());
-  //   console.log("S ", a.getSouth(), b.getSouth(), a.getSouth() <= b.getSouth());
-  //   console.log("W ", a.getWest(), b.getWest(), a.getWest() <= b.getWest());
-  // }
-
-  // console.log(a?.contains(b.getNorthWest()) && a.contains(b.getSouthEast()));
   return a?.contains(b.getNorthWest()) && a.contains(b.getSouthEast());
 }
 
@@ -438,6 +429,7 @@ function JourneySidebar(props: {
   }
 
   let service: ReactElement | undefined;
+  let serviceLink: ReactElement | undefined;
   if (journey.service) {
     service = (
       <li>
@@ -446,16 +438,22 @@ function JourneySidebar(props: {
         </a>
       </li>
     );
-  } else if (_operator && journey.route_name) {
-    service = (
-      <li>
-        <a
-          href={`/services/${_operator.noc}:${journey.route_name}/vehicles?date=${journey.date}#journey-${journey.id}`}
-        >
-          {journey.route_name}
-        </a>
-      </li>
+    serviceLink = (
+      <a
+        href={`/services/${journey.service.slug}/vehicles?date=${journey.date}#journey-${journey.id}`}
+      >
+        {journey.route_name}
+      </a>
     );
+  } else if (_operator && journey.route_name) {
+    serviceLink = (
+      <a
+        href={`/services/${_operator.noc}:${journey.route_name}/vehicles?date=${journey.date}#journey-${journey.id}`}
+      >
+        {journey.route_name}
+      </a>
+    );
+    service = <li>{serviceLink}</li>;
   } else if (journey.vehicle) {
     service = (
       <li>
@@ -464,7 +462,9 @@ function JourneySidebar(props: {
         >
           {journey.vehicle.fleet_code && journey.vehicle.reg
             ? `${journey.vehicle.fleet_code} - ${journey.vehicle.reg}`
-            : journey.vehicle.reg || journey.vehicle.fleet_code}
+            : journey.vehicle.reg ||
+              journey.vehicle.fleet_code ||
+              journey.vehicle.slug}
         </a>
       </li>
     );
@@ -524,9 +524,19 @@ function JourneySidebar(props: {
                 href={`/vehicles/${journey.vehicle.slug}?date=${journey.date}#journey-${journey.id}`}
               >
                 {journey.vehicle.fleet_code}{" "}
-                <span className="reg">{journey.vehicle.reg}</span>
+                {journey.vehicle.reg ? (
+                  <span className="reg">{journey.vehicle.reg}</span>
+                ) : journey.vehicle.fleet_code ? null : (
+                  journey.vehicle.slug
+                )}
               </a>
             </dd>
+          </div>
+        ) : null}
+        {serviceLink ? (
+          <div>
+            <dt>Service</dt>
+            <dd>{serviceLink}</dd>
           </div>
         ) : null}
         {journey.trip?.block ? (
