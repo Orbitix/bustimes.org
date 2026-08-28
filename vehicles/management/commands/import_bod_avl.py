@@ -548,10 +548,6 @@ class Command(ImportLiveVehiclesCommand):
                 ):
                     journey.trip = trip
 
-                    if block_ref and trip.block != block_ref:
-                        trip.block = block_ref
-                        trip.save(update_fields=["block"])
-
                     if (
                         not (destination_ref and journey.destination)
                         and trip.destination_id
