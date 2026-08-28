@@ -474,7 +474,10 @@ def get_trip(
     trips = trips.filter(condition).annotate(score=score).order_by("-score")
 
     if trips:
-        if trips[0].start >= timedelta(days=1):
+        if (
+            trips[0].start >= timedelta(days=1)
+            and timezone.localtime(departure_time or datetime).hour < 12
+        ):
             date -= timedelta(days=1)
         if len(trips) > 1 and trips[0].score == trips[1].score:
             filtered_trips = trips.filter(calendar__in=get_calendars(date))
