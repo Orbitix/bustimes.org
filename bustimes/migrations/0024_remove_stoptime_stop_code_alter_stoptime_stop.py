@@ -5,6 +5,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('busstops', '0018_alter_datasource_options_alter_region_options_and_more'),
@@ -16,9 +17,35 @@ class Migration(migrations.Migration):
             model_name='stoptime',
             name='stop_code',
         ),
-        migrations.AlterField(
-            model_name='stoptime',
-            name='stop',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, to='busstops.stoppoint'),
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AlterField(
+                    model_name='stoptime',
+                    name='stop',
+                    field=models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        to='busstops.stoppoint',
+                    ),
+                ),
+            ],
+            database_operations=[
+                migrations.RunSQL(
+                    sql="ALTER TABLE bustimes_stoptime ADD CONSTRAINT stoptime_stop_id_not_null "
+                    "CHECK (stop_id IS NOT NULL) NOT VALID",
+                    reverse_sql="ALTER TABLE bustimes_stoptime DROP CONSTRAINT stoptime_stop_id_not_null",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER TABLE bustimes_stoptime VALIDATE CONSTRAINT stoptime_stop_id_not_null",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+                migrations.RunSQL(
+                    sql="ALTER TABLE bustimes_stoptime ALTER COLUMN stop_id SET NOT NULL",
+                    reverse_sql="ALTER TABLE bustimes_stoptime ALTER COLUMN stop_id DROP NOT NULL",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER TABLE bustimes_stoptime DROP CONSTRAINT stoptime_stop_id_not_null",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+            ],
         ),
     ]
