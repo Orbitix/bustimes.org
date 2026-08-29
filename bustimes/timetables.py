@@ -339,7 +339,7 @@ class Timetable:
 
     def apply_stops(self, stop_situations=None):
         stop_codes = (
-            row.stop.atco_code for grouping in self.groupings for row in grouping.rows
+            row.stop.stop_code for grouping in self.groupings for row in grouping.rows
         )
         stops = (
             StopTime.stop.field.related_model.objects.select_related("locality")
@@ -655,7 +655,7 @@ class Grouping:
         for trip in self.trips:
             prev = None
             for stop_time in trip.times:
-                key = stop_time.get_key()
+                key = stop_time.stop_id
                 stop_times[key] = stop_time
                 successors.setdefault(key, set())
                 in_degree.setdefault(key, 0)
@@ -727,10 +727,7 @@ class Grouping:
             # longest trips first, to minimise duplicate rows
             self.trips.sort(key=lambda t: -len(t.times))
         else:
-            self.rows = [
-                Row(Stop(stop_times[key].stop_id, stop_times[key].stop_code))
-                for key in result
-            ]
+            self.rows = [Row(Stop(stop_times[key].stop_id)) for key in result]
             for row in self.rows:
                 row.timing_point = stop_times[row.stop.stop_code].timing_point
 
@@ -797,8 +794,8 @@ class Grouping:
             prev_trip = trip_a
 
             # don't merge circular trips (start and finish at same stop))
-            origin = trip_a.times[0].get_key()
-            destination = trip_a.times[-1].get_key()
+            origin = trip_a.times[0].stop_id
+            destination = trip_a.times[-1].stop_id
             if origin == destination:
                 continue
 
@@ -813,16 +810,16 @@ class Grouping:
                         or trip_a.ticket_machine_code == trip_b.ticket_machine_code
                     )
                     and trip_a.operator_id == trip_b.operator_id
-                    and destination == trip_b.times[0].get_key()
-                    and origin != trip_b.times[-1].get_key()  # not circular
-                    and destination != trip_b.times[-1].get_key()  # not circular
+                    and destination == trip_b.times[0].stop_id
+                    and origin != trip_b.times[-1].stop_id  # not circular
+                    and destination != trip_b.times[-1].stop_id  # not circular
                     and zero
                     <= (trip_b.start - trip_a.end)
                     <= fifteen  # short wait time
                 ):
                     # merge trip_a and trip_b
-                    origin = trip_b.times[0].get_key()
-                    destination = trip_b.times[-1].get_key()
+                    origin = trip_b.times[0].stop_id
+                    destination = trip_b.times[-1].stop_id
                     trip_a.times[-1].departure = trip_b.times[0].departure
                     trip_a.times[-1].pick_up = trip_b.times[0].pick_up
                     trip_a.times += trip_b.times[1:]
@@ -838,7 +835,7 @@ class Grouping:
         else:
             x = 0
         previous_list = [row.stop.stop_code for row in rows]
-        current_list = [stoptime.get_key() for stoptime in trip.times]
+        current_list = [stoptime.stop_id for stoptime in trip.times]
         if current_list == previous_list:
             diff = None
         else:
@@ -848,7 +845,7 @@ class Grouping:
         first = True
 
         for stoptime in trip.times:
-            key = stoptime.get_key()
+            key = stoptime.stop_id
 
             if y < len(rows):
                 existing_row = rows[y]
@@ -870,7 +867,7 @@ class Grouping:
                 assert instruction[2:] == key
 
                 if instruction[0] == "+":
-                    row = Row(Stop(stoptime.stop_id, stoptime.stop_code), [""] * x)
+                    row = Row(Stop(stoptime.stop_id), [""] * x)
                     row.timing_point = stoptime.timing_point
                     if not existing_row:
                         rows.append(row)
@@ -1000,7 +997,7 @@ class Grouping:
 
     def apply_stops(self, stops):
         for row in self.rows:
-            row.stop = stops.get(row.stop.atco_code, row.stop)
+            row.stop = stops.get(row.stop.stop_code, row.stop)
         min_height = self.min_height()
         rowspan = self.rowspan()
         for cell in self.rows[0].times:
@@ -1080,13 +1077,12 @@ class Row:
 
 
 class Stop:
-    def __init__(self, stop_id, stop_code=None):
+    def __init__(self, stop_id):
         self.timing_point = None
-        self.atco_code = stop_id
-        self.stop_code = stop_code or stop_id
+        self.stop_code = stop_id
 
     def __str__(self):
-        return self.stop_code or self.atco_code
+        return self.stop_code
 
 
 class Cell:

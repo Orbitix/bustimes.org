@@ -230,7 +230,7 @@ class Command(BaseCommand):
         with (
             connection.cursor() as cursor,
             cursor.copy(
-                "COPY bustimes_stoptime (stop_id, arrival, departure, sequence, trip_id, timing_point, pick_up, set_down, stop_code) FROM STDIN"
+                "COPY bustimes_stoptime (stop_id, arrival, departure, sequence, trip_id, timing_point, pick_up, set_down) FROM STDIN"
             ) as copy,
         ):
             for line in feed.stop_times.itertuples():
@@ -268,7 +268,6 @@ class Command(BaseCommand):
                         timing_point,
                         pick_up,
                         set_down,
-                        "",
                     )
                 )
 

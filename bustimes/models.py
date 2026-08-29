@@ -492,10 +492,7 @@ class Trip(models.Model):
 class StopTime(models.Model):
     id = models.BigAutoField(primary_key=True)
     trip = models.ForeignKey(Trip, models.DB_CASCADE, db_index=False)
-    stop_code = models.CharField(max_length=255, blank=True)
-    stop = models.ForeignKey(
-        "busstops.StopPoint", models.DO_NOTHING, null=True, blank=True
-    )
+    stop = models.ForeignKey("busstops.StopPoint", models.DO_NOTHING)
     arrival = SecondsField(null=True, blank=True)
     departure = SecondsField(null=True, blank=True)
     sequence = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -503,9 +500,6 @@ class StopTime(models.Model):
     pick_up = models.BooleanField(default=True)
     set_down = models.BooleanField(default=True)
     notes = models.ManyToManyField(Note, blank=True)
-
-    def get_key(self):
-        return self.stop_id or self.stop_code
 
     class Meta:
         ordering = ("id",)

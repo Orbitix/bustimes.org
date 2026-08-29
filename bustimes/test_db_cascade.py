@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 from django.db import transaction
 from django.test import TransactionTestCase
 
-from busstops.models import DataSource
+from busstops.models import DataSource, StopPoint
 from vehicles.models import Vehicle, VehicleJourney
 
 from .models import Note, Route, StopTime, Trip
@@ -24,7 +24,10 @@ class DatabaseCascadeTest(TransactionTestCase):
         trip = Trip.objects.create(
             route=route, start=timedelta(0), end=timedelta(minutes=1)
         )
-        stop_time = StopTime.objects.create(trip=trip, sequence=0)
+        stop = StopPoint.objects.create(
+            atco_code="test", common_name="Test Stop", active=True
+        )
+        stop_time = StopTime.objects.create(trip=trip, stop=stop, sequence=0)
 
         note = Note.objects.create(code="X", text="explanatory")
         trip.notes.add(note)

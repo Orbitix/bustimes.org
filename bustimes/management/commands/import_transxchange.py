@@ -361,23 +361,18 @@ def get_stop_time(trip, cell, stops: dict):
         trip.start = stop_time.departure_or_arrival()
 
     atco_code = cell.stopusage.stop.atco_code.upper()
-    if atco_code in stops:
-        if type(stops[atco_code]) is str:
-            stop_time.stop_code = stops[atco_code]
-        else:
-            stop_time.stop = stops[atco_code]
-            trip.destination = stop_time.stop
-    else:
-        # stop missing from TransXChange StopPoints - this should never happen
+    if atco_code not in stops:
+        # stop missing from TransXChange StopPoints - this should be impossible!
         try:
             stops[atco_code] = StopPoint.objects.get(atco_code__iexact=atco_code)
         except StopPoint.DoesNotExist:
             logger.warning(atco_code)
-            stops[atco_code] = atco_code
-            stop_time.stop_code = atco_code  # !
-        else:
-            stop_time.stop = stops[atco_code]
-            trip.destination = stop_time.stop
+            stops[atco_code] = StopPoint.objects.create(
+                atco_code=atco_code, active=True
+            )
+
+    stop_time.stop = stops[atco_code]
+    trip.destination = stop_time.stop
 
     return stop_time
 

@@ -1226,16 +1226,16 @@ class ImportTransXChangeTest(TestCase):
             )
             Trip.objects.filter(id=last_trip.id).update(start="27:00:00")
 
-            # test re-importing a previously imported service again
-            # the same warnings again
-            with self.assertWarnings("1800SHIC0G1 490016736W", "370010201"):
+            # Test re-importing a previously imported service again.
+            # The missing stop now exists, but the origin/destination is still a warning
+            with self.assertWarnings("1800SHIC0G1 490016736W"):
                 call_command("import_transxchange", zipfile_path)
 
             # ids should have kept the same
             self.assertEqual(
                 m11a_trip_ids, Trip.objects.filter(route__line_name="M11A").last().id
             )
-            # ids should not have kept the same
+            # ids should not have kept the same (different departure time)
             self.assertNotEqual(
                 m12_trip_ids, Trip.objects.filter(route__line_name="M12").last().id
             )

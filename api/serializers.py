@@ -228,16 +228,7 @@ class TripSerializer(serializers.ModelSerializer):
 
         with sentry_sdk.start_span(name="list stop times"):
             for stop_time in obj.stops:
-                if stop := stop_time.stop:
-                    name = stop.get_qualified_name()
-                    bearing = stop.get_heading()
-                    location = stop.latlong and stop.latlong.coords
-                    icon = stop.get_icon()
-                else:
-                    name = stop_time.stop_code
-                    bearing = None
-                    location = None
-                    icon = None
+                stop = stop_time.stop
                 if hasattr(stop_time, "note_codes"):
                     notes = stop_time.note_codes
                 else:
@@ -246,10 +237,10 @@ class TripSerializer(serializers.ModelSerializer):
                     "id": stop_time.id,
                     "stop": {
                         "atco_code": stop_time.stop_id,
-                        "name": name,
-                        "location": location,
-                        "bearing": bearing,
-                        "icon": icon,
+                        "name": stop.get_qualified_name(),
+                        "location": stop.latlong and stop.latlong.coords,
+                        "bearing": stop.get_heading(),
+                        "icon": stop.get_icon(),
                     },
                     "aimed_arrival_time": stop_time.arrival_time(),
                     "aimed_departure_time": stop_time.departure_time(),
