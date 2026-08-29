@@ -22,6 +22,9 @@ def jsonable(value):
         return None
     if isinstance(value, tuple):
         return [jsonable(item) for item in value]
+    if isinstance(value, str):
+        value = value.replace("\x00", "").strip()
+        return value or None
     return value
 
 

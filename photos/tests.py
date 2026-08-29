@@ -144,6 +144,14 @@ class ExifTest(TestCase):
         self.assertAlmostEqual(location.x, -0.1166666, places=5)
         self.assertEqual(str(taken_at), "2019-06-15 14:30:00+00:00")
 
+    def test_strips_null_bytes_from_strings(self):
+        # Postgres can't store 'em but some cameras pad strings with 'em
+        exif = make_exif(Software="Ver.02.51\x00\x00\x00\x00")
+        image = Image.open(BytesIO(make_jpeg(10, 10, exif=exif)))
+        metadata, _, _ = get_exif(image)
+
+        self.assertEqual(metadata, {"Software": "Ver.02.51"})
+
     def test_southern_and_eastern_hemispheres(self):
         exif = make_exif(gps=((33.0, 51.0, 0.0), "S", (151.0, 12.0, 0.0), "E"))
         image = Image.open(BytesIO(make_jpeg(10, 10, exif=exif)))
