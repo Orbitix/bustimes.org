@@ -33,7 +33,7 @@
     {% if photo %}
         <figure class="vehicle-photo">
             {% if form %}<a href="{% url 'admin:photos_photo_change' photo.id %}">{% endif %}
-            <img src="{{ photo.image_320.url }}" />
+            <img src="{{ photo.image_320.url }}"{% if photo.width and photo.height %} width="{{ photo.width }}" height="{{ photo.height }}"{% endif %} alt="" />
             {% if photo.credit %}
                 <figcaption>
                     {% if photo.url %}

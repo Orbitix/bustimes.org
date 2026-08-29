@@ -3,19 +3,23 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 from django.core.files.storage import InMemoryStorage
 from django.test import TestCase, override_settings
-from PIL import Image
+from PIL import ExifTags, Image
+
+EXIF_TAG_IDS = {name: tag_id for tag_id, name in ExifTags.TAGS.items()}
 
 from busstops.models import Operator, Region
 from vehicles.models import Vehicle
 
 from .detect import get_subject
+from .exif import get_exif
 from .models import Photo
 from .processors import SmartCrop
+from .utils import read_image
 
 
-def make_jpeg(width, height, bus=None):
+def make_jpeg(width, height, bus=None, exif=None):
     """A red image, optionally with a blue "bus" in it (a box given as
-    fractions of the image size)
+    fractions of the image size) and/or some EXIF tags
     """
     image = Image.new("RGB", (width, height), "red")
     if bus:
@@ -27,8 +31,27 @@ def make_jpeg(width, height, bus=None):
             (round(x1 * width), round(y1 * height)),
         )
     buf = BytesIO()
-    image.save(buf, "JPEG")
+    if exif:
+        image.save(buf, "JPEG", exif=exif)
+    else:
+        image.save(buf, "JPEG")
     return buf.getvalue()
+
+
+def make_exif(gps=None, date_taken=None, **tags):
+    """Build a PIL Exif object with the given (IFD0) tags, keyed by name
+    (e.g. Make="..."), and optionally a GPSInfo sub-IFD
+    ((lat, lat_ref, lon, lon_ref)) and DateTimeOriginal
+    """
+    exif = Image.Exif()
+    for name, value in tags.items():
+        exif[EXIF_TAG_IDS[name]] = value
+    if gps:
+        lat, lat_ref, lon, lon_ref = gps
+        exif[34853] = {1: lat_ref, 2: lat, 3: lon_ref, 4: lon}
+    if date_taken:
+        exif.get_ifd(0x8769)[36867] = date_taken
+    return exif
 
 
 def blueness(image):
@@ -99,6 +122,37 @@ class GetSubjectTest(TestCase):
         self.assertEqual(subject, [0, 0.1, 1, 0.9])
 
 
+class ExifTest(TestCase):
+    def test_no_exif(self):
+        image = Image.open(BytesIO(make_jpeg(10, 10)))
+        metadata, location, taken_at = get_exif(image)
+        self.assertEqual(metadata, {})
+        self.assertIsNone(location)
+        self.assertIsNone(taken_at)
+
+    def test_gps_and_date_taken(self):
+        exif = make_exif(
+            gps=((51.0, 30.0, 0.0), "N", (0.0, 7.0, 0.0), "W"),
+            date_taken="2019:06:15 14:30:00",
+            Make="TestCam",
+        )
+        image = Image.open(BytesIO(make_jpeg(10, 10, exif=exif)))
+        metadata, location, taken_at = get_exif(image)
+
+        self.assertEqual(metadata["Make"], "TestCam")
+        self.assertAlmostEqual(location.y, 51.5)
+        self.assertAlmostEqual(location.x, -0.1166666, places=5)
+        self.assertEqual(str(taken_at), "2019-06-15 14:30:00+00:00")
+
+    def test_southern_and_eastern_hemispheres(self):
+        exif = make_exif(gps=((33.0, 51.0, 0.0), "S", (151.0, 12.0, 0.0), "E"))
+        image = Image.open(BytesIO(make_jpeg(10, 10, exif=exif)))
+        _, location, _ = get_exif(image)
+
+        self.assertLess(location.y, 0)  # Sydney is south of the equator
+        self.assertGreater(location.x, 0)  # and east of Greenwich
+
+
 @override_settings(
     STORAGES={
         "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
@@ -139,6 +193,47 @@ class PhotoTest(TestCase):
 
         self.assertContains(response, '<img src="')
         self.assertEqual(len(opens), 0)
+
+    def test_vehicle_detail_photo_width_height(self):
+        """width/height attributes appear on the <img> when known,
+        still without opening the image from storage
+        """
+        photo = Photo.objects.get()
+        photo.width, photo.height = 1600, 900
+        photo.save(update_fields=["width", "height"])
+
+        opens = []
+        real_open = InMemoryStorage.open
+
+        def counting_open(self, name, mode="rb"):
+            opens.append(name)
+            return real_open(self, name, mode)
+
+        InMemoryStorage.open = counting_open
+        try:
+            response = self.client.get(self.vehicle.get_absolute_url())
+        finally:
+            InMemoryStorage.open = real_open
+
+        self.assertContains(response, 'width="1600" height="900"')
+        self.assertEqual(len(opens), 0)
+
+    def test_read_image(self):
+        """width, height, EXIF metadata and location get set from an
+        uploaded image's own bytes
+        """
+        exif = make_exif(
+            gps=((51.0, 30.0, 0.0), "N", (0.0, 7.0, 0.0), "W"),
+            date_taken="2019:06:15 14:30:00",
+            Make="Praktica",
+        )
+        photo = Photo()
+        read_image(photo, make_jpeg(400, 300, exif=exif))
+
+        self.assertEqual((photo.width, photo.height), (400, 300))
+        self.assertEqual(photo.metadata["exif"]["Make"], "Praktica")
+        self.assertAlmostEqual(photo.location.y, 51.5)
+        self.assertEqual(str(photo.taken_at), "2019-06-15 14:30:00+00:00")
 
     def test_no_bounding_box(self):
         """with no detected vehicle, the whole photo is used, as before"""

@@ -47,6 +47,8 @@ class Thumbnail(SmartSpec):
 
 class Photo(models.Model):
     image = models.ImageField()
+    width = models.PositiveSmallIntegerField(null=True, blank=True)
+    height = models.PositiveSmallIntegerField(null=True, blank=True)
 
     # [x1, y1, x2, y2] as fractions of the image size - see photos.detect
     bbox = ArrayField(models.FloatField(), size=4, null=True, blank=True)
@@ -62,8 +64,10 @@ class Photo(models.Model):
     credit = models.CharField(max_length=255, blank=True)
     caption = models.CharField(max_length=255, blank=True)
     url = models.URLField(blank=True, verbose_name="URL")
-    created_at = models.DateTimeField(null=True, blank=True)
     license = models.CharField(null=True, blank=True)
+    taken_at = models.DateTimeField(null=True, blank=True)
+    location = models.PointField(null=True, blank=True)
+    metadata = models.JSONField(blank=True, default=dict)
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, models.SET_NULL, null=True, blank=True
