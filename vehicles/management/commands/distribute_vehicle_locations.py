@@ -136,6 +136,7 @@ class Command(BaseCommand):
                 await self.handle_items(message["items"])
             except ConnectionError:
                 logger.exception("error distributing vehicle locations")
+                raise
 
     def handle(self, *args, **options):
         asyncio.run(self.run())
