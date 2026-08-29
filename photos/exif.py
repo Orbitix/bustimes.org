@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from math import isfinite
 
 from django.contrib.gis.geos import Point
 from PIL import ExifTags, Image
@@ -17,7 +18,8 @@ IGNORED_TAGS = {
 
 def jsonable(value):
     if isinstance(value, IFDRational):
-        return float(value)
+        value = float(value)
+        return value if isfinite(value) else None
     if isinstance(value, bytes):
         return None
     if isinstance(value, tuple):
