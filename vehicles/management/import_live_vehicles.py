@@ -183,7 +183,9 @@ class ImportLiveVehiclesCommand(BaseCommand):
 
             if journey and journey.trip and journey.trip.garage_id != vehicle.garage_id:
                 vehicle.garage_id = journey.trip.garage_id
-                vehicle.save(update_fields=["garage"])
+                Vehicle.objects.filter(id=vehicle.id).update(
+                    garage_id=vehicle.garage_id
+                )
 
         if not journey:
             return

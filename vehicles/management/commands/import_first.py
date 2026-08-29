@@ -37,7 +37,15 @@ class Command(ImportLiveVehiclesCommand):
     def get_vehicle(self, item):
         vehicle_code = self.split_vehicle_id(item)[1]
 
-        fleet_number = int(vehicle_code) if vehicle_code.isdigit() else None
+        fleet_number = vehicle_code if vehicle_code.isdigit() else None
+
+        if fleet_number and (
+            vehicle := Vehicle.objects.filter(
+                operator__group__name="First", code=vehicle_code
+            ).first()
+        ):
+            return vehicle, False
+
         return Vehicle.objects.get_or_create(
             {
                 "source": self.source,
