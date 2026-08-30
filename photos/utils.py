@@ -8,8 +8,6 @@ from django.conf import settings
 from django.contrib.gis.geos import Point
 from django.core.files.base import ContentFile
 from PIL import Image
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
 
 from .exif import get_exif
 from .models import Photo
@@ -61,8 +59,6 @@ def add_flickr_photo(url, vehicle, request):
     photo_id = url.split("/photos/", 1)[1].split("/")[1]
     photo = Photo()
     session = requests.Session()
-    retries = Retry(total=3, backoff_factor=1, status_forcelist=(502, 503, 504))
-    session.mount("https://", HTTPAdapter(max_retries=retries))
     session.headers.update({"User-Agent": "bustimes.org"})
     session.params = {
         "format": "json",
@@ -71,7 +67,7 @@ def add_flickr_photo(url, vehicle, request):
         "nojsoncallback": 1,
     }
     response = session.get(
-        "https://www.flickr.com/services/rest",
+        "https://api.flickr.com/services/rest",
         params={"method": "flickr.photos.getInfo"},
         timeout=10,
     )
@@ -104,7 +100,7 @@ def add_flickr_photo(url, vehicle, request):
         pass
 
     response = session.get(
-        "https://www.flickr.com/services/rest",
+        "https://api.flickr.com/services/rest",
         params={"method": "flickr.photos.getSizes"},
         timeout=10,
     )

@@ -882,8 +882,9 @@ class VehicleDetailView(DetailView):
                     form.add_error("url", "That doesn't look like a Flickr photo URL")
                 except WrongLicense:
                     form.add_error("url", "That photo isn't permissively licensed")
-                except RequestException as e:
-                    form.add_error("url", f"Couldn't get the photo from Flickr ({e})")
+                except RequestException:
+                    form.add_error("url", "Couldn't get photo from Flickr")
+                    logger.exception("Flickr error")
 
         if form.errors:
             self.form = form
