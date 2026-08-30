@@ -253,6 +253,9 @@ class TripSerializer(serializers.ModelSerializer):
                     "expected_departure_time": getattr(
                         stop_time, "expected_departure", None
                     ),
+                    "actual_arrival_time": getattr(
+                        stop_time, "actual_arrival_time", None
+                    ),
                     "actual_departure_time": getattr(
                         stop_time, "actual_departure_time", None
                     ),

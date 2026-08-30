@@ -200,7 +200,7 @@ class VehicleJourneyViewSet(viewsets.ReadOnlyModelViewSet):
         return qs
 
     @staticmethod
-    def set_actual_departure_times(stop_times, locations):
+    def set_actual_times(stop_times, locations):
         stops = [st for st in stop_times if st.stop and st.stop.latlong]
         if not stops:
             return
@@ -239,7 +239,15 @@ class VehicleJourneyViewSet(viewsets.ReadOnlyModelViewSet):
                 idx = int(np.argmin(distances))
 
             if distances[idx] < 100:
-                stops[idx].actual_departure_time = location["datetime"]
+                stop = stops[idx]
+                if (
+                    stop.arrival is not None
+                    and stop.departure is not None
+                    and stop.arrival != stop.departure
+                    and not getattr(stop, "actual_arrival_time", None)
+                ):
+                    stop.actual_arrival_time = location["datetime"]
+                stop.actual_departure_time = location["datetime"]
 
     def trip_from_siri(self, instance, locations):
         try:
@@ -373,7 +381,7 @@ class VehicleJourneyViewSet(viewsets.ReadOnlyModelViewSet):
             if instance.trip.id:
                 instance.trip.stops = list(TripViewSet.get_stops(instance.trip))
             if locations:
-                self.set_actual_departure_times(instance.trip.stops, locations)
+                self.set_actual_times(instance.trip.stops, locations)
             trip_serializer = serializers.TripSerializer(instance.trip)
             extra_data["trip"] = trip_serializer.data
 
