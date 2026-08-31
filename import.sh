@@ -12,37 +12,45 @@ if [[ ! -f manage.py ]] ; then
     exit 1
 fi
 
-# create lockfile
-# I think it's important that this goes before the `trap`
-mkdir /var/lock/bustimes-import || {
-    echo "An import appears to be running already"
-    exit 1
-}
+# # create lockfile
+# # I think it's important that this goes before the `trap`
+# mkdir /var/lock/bustimes-import || {
+#     echo "An import appears to be running already"
+#     exit 1
+# }
 
-function finish {
-    # remove lockfile
-    rmdir /var/lock/bustimes-import 2> /dev/null
-}
-trap finish EXIT SIGINT SIGTERM
+# function finish {
+#     # remove lockfile
+#     rmdir /var/lock/bustimes-import 2> /dev/null
+# }
+# trap finish EXIT SIGINT SIGTERM
 
 USERNAME=$1
 PASSWORD=$2
 
 
-./manage.py nptg_new
-./manage.py naptan_new
-./manage.py naptan_new "Irish NaPTAN"
+echo 'Starting import...'
+
+# echo 'Importing NPTG'
+# ./manage.py nptg_new
+
+# echo 'Importing NaPTAN'
+# ./manage.py naptan_new
+
+# echo 'Importing Irish NaPTAN'
+# ./manage.py naptan_new "Irish NaPTAN"
 
 
 cd data/TNDS
 
+echo 'Downloading NCSD and L files...'
 ncsd_old=$(ls -l NCSD.zip)
 wget -qN https://bodds-prod-coach-data.s3.eu-west-2.amazonaws.com/TxC-2.4.zip -O NCSD.zip
 ncsd_new=$(ls -l NCSD.zip)
 
-tfl_old=$(ls -l L.zip)
-wget -qN https://tfl.gov.uk/tfl/syndication/feeds/journey-planner-timetables.zip -O L.zip
-tfl_new=$(ls -l L.zip)
+# tfl_old=$(ls -l L.zip)
+# wget -qN https://tfl.gov.uk/tfl/syndication/feeds/journey-planner-timetables.zip -O L.zip
+# tfl_new=$(ls -l L.zip)
 
 cd ../..
 
@@ -51,12 +59,12 @@ if [[ $ncsd_old != $ncsd_new ]]; then
     ./manage.py import_transxchange data/TNDS/NCSD.zip
 fi
 
-if [[ $tfl_old != $tfl_new ]]; then
-    echo 'L.zip'
-    ./manage.py import_transxchange data/TNDS/L.zip
-fi
+# if [[ $tfl_old != $tfl_new ]]; then
+#     echo 'L.zip'
+#     ./manage.py import_transxchange data/TNDS/L.zip
+# fi
 
-
+echo 'Importing NOC'
 ./manage.py import_noc
 
 
@@ -65,10 +73,13 @@ if [[ $USERNAME == '' || $PASSWORD == '' ]]; then
    exit 1
 fi
 
+echo 'Importing TNDS'
 ./manage.py import_tnds "$USERNAME" "$PASSWORD"
 
+echo 'Importing GTFS'
 ./manage.py import_gtfs
 
+echo 'Updating search indexes...'
 ./manage.py update_search_indexes
 
 finish

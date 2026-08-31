@@ -48,10 +48,14 @@ dependencies = [
     "django-imagekit>=6.1.0",
     "django-storages>=1.14.6",
     "transxchange-parser",
+<<<<<<< Updated upstream
     "channels[daphne]>=4.3.2",
     "channels-redis>=4.3.0",
     "granian[uvloop]>=2.7.9",
     "django-orjson[drf]>=1.1.0",
+=======
+    "python-dotenv>=1.2.2",
+>>>>>>> Stashed changes
 ]
 
 [dependency-groups]
